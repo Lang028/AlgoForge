@@ -1,9 +1,10 @@
-﻿@{
-    ViewBag.Title = "About";
+@{
+    ViewData["Title"] = "About";
 }
+
 <main aria-labelledby="title">
-    <h2 id="title">@ViewBag.Title.</h2>
+    <h2 id="title">@ViewData["Title"]</h2>
     <h3>@ViewBag.Message</h3>
 
-    <p>Use this area to provide additional information.</p>
+    <p>Geeked On is built by AlgoForge &mdash; Group 12, Application Development, Durban University of Technology, as a Demo Day project.</p>
 </main>
