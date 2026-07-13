@@ -83,35 +83,30 @@ Events move through `Draft → Live → PostEvent → Archived`. Uploads are onl
 ### Run the web app
 
 ```bash
-git clone https://github.com/<org>/geeked-on.git
-cd geeked-on
+git clone https://github.com/Lang028/AlgoForge.git
+cd AlgoForge
 
 # apply migrations
-dotnet ef database update --project src/GeekedOn.Web
+dotnet ef database update --project AlgoForge/AlgoForge
 
 # run
-dotnet run --project src/GeekedOn.Web
+dotnet run --project AlgoForge/AlgoForge
 ```
 
 ### Run the face pipeline
 
-```bash
-cd src/GeekedOn.FacePipeline
-pip install -r requirements.txt
-python worker.py
-```
+Not built yet — the Python worker will land as a sibling project once the face pipeline architecture session happens (see `BUILD_GUIDE.md` build order).
 
 Configuration (connection strings, blob credentials, queue names) is read from `appsettings.Development.json` and environment variables — see `appsettings.example.json` for the required keys. Never commit real credentials.
 
 ## Project structure
 
+Kept the `AlgoForge` project/repo naming rather than renaming to `GeekedOn.*`:
+
 ```
-src/
-  GeekedOn.Web/           ASP.NET Core MVC app (controllers, views, EF models)
-  GeekedOn.FacePipeline/  Python worker: detection, embedding, clustering
-docs/
-  use-cases/              Use case diagram and requirements document
-  erd/                    Database schema
+AlgoForge/
+  AlgoForge/              ASP.NET Core MVC app (Controllers, Views, Models, Data)
+docs/                     (not yet created) use-case diagram, requirements doc, ERD
 ```
 
 ## Roadmap
