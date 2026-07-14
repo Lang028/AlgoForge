@@ -6,10 +6,8 @@ namespace AlgoForge.Models
 
         public Guid EventId { get; set; }
         public Event? Event { get; set; }
-
-        // No Album entity yet -- albums aren't built out in this pass.
         public Guid? AlbumId { get; set; }
-
+        public Album? Album { get; set; }
         public Guid UploadedByUserId { get; set; }
         public ApplicationUser? UploadedByUser { get; set; }
 

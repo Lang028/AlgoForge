@@ -22,6 +22,33 @@ namespace AlgoForge.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
+            modelBuilder.Entity("AlgoForge.Models.Album", b =>
+                {
+                    b.Property<Guid>("AlbumId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("AlbumDescription")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("AlbumName")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("CreatedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("eventId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("AlbumId");
+
+                    b.HasIndex("eventId");
+
+                    b.ToTable("Albums");
+                });
+
             modelBuilder.Entity("AlgoForge.Models.ApplicationUser", b =>
                 {
                     b.Property<Guid>("Id")
@@ -247,6 +274,8 @@ namespace AlgoForge.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("AlbumId");
+
                     b.HasIndex("EventId");
 
                     b.HasIndex("UploadedByUserId");
@@ -385,6 +414,17 @@ namespace AlgoForge.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
+            modelBuilder.Entity("AlgoForge.Models.Album", b =>
+                {
+                    b.HasOne("AlgoForge.Models.Event", "Events")
+                        .WithMany("Albums")
+                        .HasForeignKey("eventId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Events");
+                });
+
             modelBuilder.Entity("AlgoForge.Models.Attendee", b =>
                 {
                     b.HasOne("AlgoForge.Models.ApplicationUser", "ClaimedByUser")
@@ -453,6 +493,11 @@ namespace AlgoForge.Migrations
 
             modelBuilder.Entity("AlgoForge.Models.Photo", b =>
                 {
+                    b.HasOne("AlgoForge.Models.Album", "Album")
+                        .WithMany("Photos")
+                        .HasForeignKey("AlbumId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("AlgoForge.Models.Event", "Event")
                         .WithMany("Photos")
                         .HasForeignKey("EventId")
@@ -464,6 +509,8 @@ namespace AlgoForge.Migrations
                         .HasForeignKey("UploadedByUserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.Navigation("Album");
 
                     b.Navigation("Event");
 
@@ -521,8 +568,15 @@ namespace AlgoForge.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("AlgoForge.Models.Album", b =>
+                {
+                    b.Navigation("Photos");
+                });
+
             modelBuilder.Entity("AlgoForge.Models.Event", b =>
                 {
+                    b.Navigation("Albums");
+
                     b.Navigation("Attendees");
 
                     b.Navigation("Memberships");
