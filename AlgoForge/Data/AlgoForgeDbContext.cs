@@ -17,6 +17,7 @@ namespace AlgoForge.Data
         public DbSet<EventMembership> EventMemberships => Set<EventMembership>();
         public DbSet<Attendee> Attendees => Set<Attendee>();
         public DbSet<Photo> Photos => Set<Photo>();
+        public DbSet<Album> Albums => Set<Album>();
 
         protected override void OnModelCreating(ModelBuilder builder)
         {
@@ -52,6 +53,12 @@ namespace AlgoForge.Data
                 .HasOne(o => o.AdminUser)
                 .WithMany()
                 .HasForeignKey(o => o.AdminUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            builder.Entity<Photo>()
+                .HasOne(p => p.Album)
+                .WithMany(a => a.Photos)
+                .HasForeignKey(p => p.AlbumId)
                 .OnDelete(DeleteBehavior.Restrict);
         }
     }
