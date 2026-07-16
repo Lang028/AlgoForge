@@ -18,5 +18,9 @@ namespace AlgoForge.Models
         public DateTime UploadedAt { get; set; } = DateTime.UtcNow;
 
         public PhotoStatus Status { get; set; } = PhotoStatus.Visible;
+
+        public PhotoFaceProcessingStatus FaceProcessingStatus { get; set; } = PhotoFaceProcessingStatus.Pending;
+
+        public ICollection<FaceDetection> FaceDetections { get; set; } = new List<FaceDetection>();
     }
 }

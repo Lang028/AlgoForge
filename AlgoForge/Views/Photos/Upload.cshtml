@@ -1,0 +1,17 @@
+@{
+    ViewData["Title"] = "Upload photos";
+    var eventId = ViewData["EventId"];
+    var eventName = ViewData["EventName"];
+}
+
+<h2>Upload photos to @eventName</h2>
+
+<form method="post" enctype="multipart/form-data" asp-action="Upload" asp-route-eventId="@eventId">
+    <div class="mb-3">
+        <input type="file" name="files" multiple accept="image/*" class="form-control" required />
+        <div class="form-text">You can select multiple photos at once. Face detection runs immediately after upload -- this may take a few seconds per photo.</div>
+    </div>
+    <button type="submit" class="btn btn-primary">Upload</button>
+</form>
+
+<p class="mt-3"><a asp-action="Index" asp-route-eventId="@eventId">Back to gallery</a></p>

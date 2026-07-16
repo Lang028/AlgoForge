@@ -17,6 +17,8 @@ namespace AlgoForge.Data
         public DbSet<EventMembership> EventMemberships => Set<EventMembership>();
         public DbSet<Attendee> Attendees => Set<Attendee>();
         public DbSet<Photo> Photos => Set<Photo>();
+        public DbSet<FaceDetection> FaceDetections => Set<FaceDetection>();
+        public DbSet<FaceCluster> FaceClusters => Set<FaceCluster>();
 
         protected override void OnModelCreating(ModelBuilder builder)
         {
@@ -52,6 +54,27 @@ namespace AlgoForge.Data
                 .HasOne(o => o.AdminUser)
                 .WithMany()
                 .HasForeignKey(o => o.AdminUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            builder.Entity<FaceDetection>()
+                .HasOne(d => d.FaceCluster)
+                .WithMany(c => c.Detections)
+                .HasForeignKey(d => d.FaceClusterId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // FaceCluster.LinkedAttendee and FaceCluster.IdentifiedByUser point at different
+            // tables, but both need Restrict to keep deletes explicit rather than cascading
+            // through an identification decision.
+            builder.Entity<FaceCluster>()
+                .HasOne(c => c.LinkedAttendee)
+                .WithMany()
+                .HasForeignKey(c => c.LinkedAttendeeId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            builder.Entity<FaceCluster>()
+                .HasOne(c => c.IdentifiedByUser)
+                .WithMany()
+                .HasForeignKey(c => c.IdentifiedByUserId)
                 .OnDelete(DeleteBehavior.Restrict);
         }
     }
