@@ -366,3 +366,4 @@ AlgoForge/wwwroot/uploads/
 AlgoForge/App_Data/embeddings/
 face_service/.venv/
 face_service/__pycache__/
+.claude/
