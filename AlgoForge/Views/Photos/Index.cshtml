@@ -1,0 +1,93 @@
+@using System.Globalization
+@model List<AlgoForge.Models.Photo>
+@{
+    ViewData["Title"] = "Gallery";
+    var eventId = ViewData["EventId"];
+    var eventName = ViewData["EventName"];
+    var clusterLabels = ViewData["ClusterLabels"] as Dictionary<Guid, string> ?? new Dictionary<Guid, string>();
+
+    string Pct(double value) => (value * 100).ToString(CultureInfo.InvariantCulture);
+}
+
+<h2>@eventName &mdash; Gallery</h2>
+<a class="btn btn-primary mb-3" asp-action="Upload" asp-route-eventId="@eventId">Upload photos</a>
+
+<style>
+    .photo-card {
+        position: relative;
+        display: inline-block;
+        margin: 0.5rem;
+        line-height: 0;
+    }
+
+    .photo-card img {
+        max-width: 320px;
+        display: block;
+    }
+
+    .face-box {
+        position: absolute;
+        border: 2px solid #0d6efd;
+        box-sizing: border-box;
+    }
+
+    .face-box .face-label {
+        position: absolute;
+        top: -1.6rem;
+        left: 0;
+        background: #0d6efd;
+        color: #fff;
+        font-size: 0.75rem;
+        padding: 0.1rem 0.4rem;
+        border-radius: 0.2rem;
+        white-space: nowrap;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.15s ease-in-out;
+    }
+
+    .face-box:hover {
+        border-color: #ffc107;
+        z-index: 2;
+    }
+
+    .face-box:hover .face-label {
+        opacity: 1;
+    }
+</style>
+
+@if (!Model.Any())
+{
+    <p>No photos yet. <a asp-action="Upload" asp-route-eventId="@eventId">Upload the first one.</a></p>
+}
+else
+{
+    <div class="d-flex flex-wrap">
+        @foreach (var photo in Model)
+        {
+            <div class="photo-card">
+                <img src="@photo.BlobUrl" alt="Event photo" />
+
+                @if (photo.FaceProcessingStatus == AlgoForge.Models.PhotoFaceProcessingStatus.Pending)
+                {
+                    <span class="badge bg-secondary position-absolute top-0 start-0 m-1">Processing&hellip;</span>
+                }
+                else if (photo.FaceProcessingStatus == AlgoForge.Models.PhotoFaceProcessingStatus.Failed)
+                {
+                    <span class="badge bg-danger position-absolute top-0 start-0 m-1">Detection failed</span>
+                }
+
+                @foreach (var detection in photo.FaceDetections)
+                {
+                    var label = detection.FaceClusterId.HasValue && clusterLabels.TryGetValue(detection.FaceClusterId.Value, out var name)
+                        ? name
+                        : "Unknown";
+
+                    <div class="face-box" style="left: @Pct(detection.BoxX)%; top: @Pct(detection.BoxY)%; width: @Pct(detection.BoxWidth)%; height: @Pct(detection.BoxHeight)%;">
+                        <span class="face-label">@label</span>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+}

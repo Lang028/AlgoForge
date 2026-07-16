@@ -1,0 +1,40 @@
+@model List<AlgoForge.Models.Event>
+@{
+    ViewData["Title"] = "Events";
+}
+
+<h2>Events</h2>
+
+@if (!Model.Any())
+{
+    <p>No events yet.</p>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Organisation</th>
+                <th>Date</th>
+                <th>Status</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var evt in Model)
+            {
+                <tr>
+                    <td>@evt.Name</td>
+                    <td>@evt.Organisation?.Name</td>
+                    <td>@evt.EventDate.ToString("d")</td>
+                    <td>@evt.Status</td>
+                    <td>
+                        <a class="btn btn-sm btn-primary" asp-controller="Photos" asp-action="Index" asp-route-eventId="@evt.Id">Gallery</a>
+                        <a class="btn btn-sm btn-outline-primary" asp-controller="Photos" asp-action="Upload" asp-route-eventId="@evt.Id">Upload</a>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}

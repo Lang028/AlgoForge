@@ -361,3 +361,8 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+# AlgoForge: local upload storage, generated embedding sidecar files, Python venv
+AlgoForge/wwwroot/uploads/
+AlgoForge/App_Data/embeddings/
+face_service/.venv/
+face_service/__pycache__/
