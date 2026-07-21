@@ -1,5 +1,6 @@
 using AlgoForge.Data;
 using AlgoForge.Models;
+using AlgoForge.Services;
 using AlgoForge.Services.FaceService;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -18,6 +19,7 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole<Guid>>()
 
 builder.Services.AddAuthorization();
 builder.Services.AddControllersWithViews();
+builder.Services.AddScoped<AttendeeImportService>();
 
 builder.Services.AddHttpClient<FaceMatchingService>(client =>
 {
@@ -55,3 +57,5 @@ app.MapControllerRoute(
     pattern: "{controller=Home}/{action=Index}/{id?}");
 
 app.Run();
+
+public partial class Program { }

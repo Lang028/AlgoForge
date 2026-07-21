@@ -17,6 +17,8 @@ namespace AlgoForge.Data
         public DbSet<EventMembership> EventMemberships => Set<EventMembership>();
         public DbSet<Attendee> Attendees => Set<Attendee>();
         public DbSet<Photo> Photos => Set<Photo>();
+        public DbSet<FaceCluster> FaceClusters => Set<FaceCluster>();
+        public DbSet<FaceDetection> FaceDetections => Set<FaceDetection>();
 
         protected override void OnModelCreating(ModelBuilder builder)
         {

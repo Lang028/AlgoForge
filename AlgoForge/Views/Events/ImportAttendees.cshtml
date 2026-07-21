@@ -1,0 +1,100 @@
+﻿@model AlgoForge.ViewModels.Events.ImportAttendeesViewModel
+@using AlgoForge.ViewModels.Events
+@{
+    ViewData["Title"] = "Import Attendees — " + Model.EventName;
+}
+
+<h2>Import Attendees</h2>
+<h5 class="text-muted mb-4">Event: @Model.EventName</h5>
+
+@if (TempData["SuccessMessage"] is string successMsg)
+{
+    <div class="alert alert-success">@successMsg</div>
+}
+@if (TempData["ErrorMessage"] is string errMsg)
+{
+    <div class="alert alert-danger">@errMsg</div>
+}
+
+@if (!ViewData.ModelState.IsValid)
+{
+    <div class="alert alert-danger">
+        @foreach (var error in ViewData.ModelState.Values.SelectMany(v => v.Errors))
+        {
+            <div>@error.ErrorMessage</div>
+        }
+    </div>
+}
+
+@* ── Error summary shown after a failed parse ──────────────────────── *@
+@if (Model.ParseResult is { } result && result.Errors.Any())
+{
+    int validCount = result.ValidAttendees.Count;
+    int errorCount = result.Errors.Count;
+
+    <div class="alert alert-warning">
+        <strong>@errorCount row(s) failed, @validCount row(s) valid.</strong>
+        Fix the file and re-upload, or proceed with only the @validCount valid row(s).
+    </div>
+
+    <table class="table table-sm table-bordered mb-3">
+        <thead class="table-danger">
+            <tr><th>Row</th><th>Field</th><th>Reason</th></tr>
+        </thead>
+        <tbody>
+            @foreach (var err in result.Errors)
+            {
+                <tr>
+                    <td>@err.RowNumber</td>
+                    <td>@err.Field</td>
+                    <td>@err.Reason</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    @if (validCount > 0)
+    {
+        <form method="post"
+              asp-controller="Events"
+              asp-action="ImportAttendeesConfirm"
+              asp-route-eventId="@Model.EventId"
+              class="mb-4">
+            @Html.AntiForgeryToken()
+            @for (int i = 0; i < result.ValidAttendees.Count; i++)
+            {
+                <input type="hidden" name="attendees[@i].Name"        value="@result.ValidAttendees[i].Name" />
+                <input type="hidden" name="attendees[@i].Email"       value="@result.ValidAttendees[i].Email" />
+                <input type="hidden" name="attendees[@i].ContactInfo" value="@result.ValidAttendees[i].ContactInfo" />
+            }
+            <button type="submit" class="btn btn-warning me-2">
+                Import @validCount valid row(s) anyway
+            </button>
+            <a asp-action="ImportAttendees" asp-route-eventId="@Model.EventId"
+               class="btn btn-outline-secondary">Cancel and fix the file</a>
+        </form>
+    }
+}
+
+@* ── Upload form ─────────────────────────────────────────────────────── *@
+<div class="card" style="max-width: 640px;">
+    <div class="card-header">Upload CSV file</div>
+    <div class="card-body">
+        <p class="mb-1 small text-muted">Required columns (any order):</p>
+        <p class="mb-2"><code>Name</code>, <code>Email</code>, <code>ContactInfo</code></p>
+        <p class="mb-3 small">
+            <a href="data:text/csv;charset=utf-8,Name%2CEmail%2CContactInfo%0AJane%20Doe%2Cjane%40example.com%2C%2B27%2081%20234%205678%0AJohn%20Smith%2Cjohn.smith%40example.com%2Cjohn%40company.com"
+               download="attendees_template.csv">Download template (CSV)</a>
+        </p>
+
+        <form method="post" asp-route-eventId="@Model.EventId" enctype="multipart/form-data">
+            @Html.AntiForgeryToken()
+            <div class="mb-3">
+                <label for="file" class="form-label">Select CSV file (max 10 MB)</label>
+                <input type="file" name="file" id="file" class="form-control" accept=".csv" required />
+            </div>
+            <button type="submit" class="btn btn-primary">Parse &amp; Preview</button>
+            <a asp-action="Index" class="btn btn-outline-secondary ms-2">Cancel</a>
+        </form>
+    </div>
+</div>
