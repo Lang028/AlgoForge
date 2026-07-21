@@ -35,6 +35,9 @@ if (app.Environment.IsDevelopment())
     using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<AlgoForgeDbContext>();
     var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+    // Create/upgrade the local dev database before seeding, so a fresh clone works
+    // without needing the dotnet-ef tool installed.
+    await db.Database.MigrateAsync();
     await DbInitializer.SeedAsync(db, userManager);
 }
 
