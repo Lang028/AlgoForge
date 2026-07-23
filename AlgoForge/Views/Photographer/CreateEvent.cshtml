@@ -1,0 +1,50 @@
+@model AlgoForge.ViewModels.Photographer.CreateEventViewModel
+@{
+    ViewData["Title"] = "Create Event";
+}
+
+<h2 class="mb-4">Create Event</h2>
+
+<form asp-action="CreateEvent" method="post" class="col-md-8">
+    <div asp-validation-summary="All" class="text-danger"></div>
+
+    <div class="mb-3">
+        <label asp-for="OrganisationId" class="form-label"></label>
+        <select asp-for="OrganisationId" class="form-select">
+            <option value="">-- select organisation --</option>
+            @foreach (var org in Model.Organisations)
+            {
+                <option value="@org.Id">@org.Name</option>
+            }
+        </select>
+    </div>
+
+    <div class="mb-3">
+        <label asp-for="Name" class="form-label"></label>
+        <input asp-for="Name" class="form-control" placeholder="e.g. Demo Day 2026" />
+        <span asp-validation-for="Name" class="text-danger"></span>
+    </div>
+
+    <div class="mb-3">
+        <label asp-for="Description" class="form-label"></label>
+        <textarea asp-for="Description" class="form-control" rows="3"></textarea>
+    </div>
+
+    <div class="mb-3">
+        <label asp-for="EventDate" class="form-label"></label>
+        <input asp-for="EventDate" class="form-control" type="date" />
+    </div>
+
+    <div class="form-check form-switch mb-4">
+        <input asp-for="RequireAttendeeConfirmation" class="form-check-input" role="switch" />
+        <label asp-for="RequireAttendeeConfirmation" class="form-check-label">
+            Require attendees to confirm suggested tags
+        </label>
+        <div class="form-text">
+            Turn this off only for small, trusted events &mdash; identified tags will auto-confirm instead.
+        </div>
+    </div>
+
+    <button type="submit" class="btn btn-primary">Create Event</button>
+    <a asp-action="Index" class="btn btn-link">Cancel</a>
+</form>

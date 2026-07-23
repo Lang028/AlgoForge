@@ -1,0 +1,63 @@
+@model AlgoForge.ViewModels.Photographer.FaceClusterListViewModel
+@{
+    ViewData["Title"] = Model.EventName + " - Face Clusters";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0">@Model.EventName &mdash; Face Clusters</h2>
+    <a asp-action="Index" class="btn btn-link">&larr; Back to dashboard</a>
+</div>
+
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success">@TempData["Success"]</div>
+}
+@if (TempData["Info"] != null)
+{
+    <div class="alert alert-info">@TempData["Info"]</div>
+}
+
+<h4>Unidentified Clusters (@Model.UnidentifiedClusters.Count)</h4>
+<p class="text-muted small">These faces haven't been linked to an invited attendee yet &mdash; nothing here is visible to attendees.</p>
+<div class="row g-3 mb-5">
+    @if (!Model.UnidentifiedClusters.Any())
+    {
+        <p class="text-muted">Nothing left to identify.</p>
+    }
+    @foreach (var c in Model.UnidentifiedClusters)
+    {
+        <div class="col-md-3">
+            <div class="card">
+                @if (c.RepresentativeThumbnailUrl != null)
+                {
+                    <img src="@c.RepresentativeThumbnailUrl" class="card-img-top" style="height:140px;object-fit:cover;" />
+                }
+                <div class="card-body">
+                    <p class="small text-muted mb-2">@c.DetectionCount photo(s)</p>
+                    <a asp-action="IdentifyCluster" asp-route-clusterId="@c.ClusterId" class="btn btn-sm btn-primary w-100">
+                        Identify
+                    </a>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<h4>Identified Clusters (@Model.IdentifiedClusters.Count)</h4>
+<div class="row g-3">
+    @foreach (var c in Model.IdentifiedClusters)
+    {
+        <div class="col-md-3">
+            <div class="card">
+                @if (c.RepresentativeThumbnailUrl != null)
+                {
+                    <img src="@c.RepresentativeThumbnailUrl" class="card-img-top" style="height:140px;object-fit:cover;" />
+                }
+                <div class="card-body">
+                    <h6 class="mb-1">@c.IdentifiedAttendeeName</h6>
+                    <p class="small text-muted mb-0">@c.DetectionCount photo(s)</p>
+                </div>
+            </div>
+        </div>
+    }
+</div>

@@ -1,0 +1,39 @@
+@model AlgoForge.ViewModels.Photographer.IdentifyClusterViewModel
+@{
+    ViewData["Title"] = "Identify Cluster";
+}
+
+<h2 class="mb-4">Who is this?</h2>
+
+<div class="d-flex gap-2 mb-4 flex-wrap">
+    @foreach (var url in Model.SampleThumbnailUrls)
+    {
+        <img src="@url" style="width:100px;height:100px;object-fit:cover;border-radius:8px;" />
+    }
+</div>
+
+<form asp-action="IdentifyCluster" method="post" class="col-md-6">
+    <input type="hidden" asp-for="ClusterId" />
+    <input type="hidden" asp-for="EventId" />
+
+    <div class="mb-3">
+        <label asp-for="SelectedEventMembershipId" class="form-label"></label>
+        <select asp-for="SelectedEventMembershipId" class="form-select">
+            <option value="0">-- not in the list, invite them below --</option>
+            @foreach (var a in Model.InvitedAttendees)
+            {
+                <option value="@a.MembershipId">@a.AttendeeName</option>
+            }
+        </select>
+    </div>
+
+    <div class="mb-3">
+        <label asp-for="NewAttendeeEmail" class="form-label"></label>
+        <input asp-for="NewAttendeeEmail" class="form-control" placeholder="name@example.com" />
+        <div class="form-text">Only used if you didn't pick someone from the list above.</div>
+        <span asp-validation-for="NewAttendeeEmail" class="text-danger"></span>
+    </div>
+
+    <button type="submit" class="btn btn-primary">Confirm Identification</button>
+    <a asp-action="FaceClusters" asp-route-eventId="@Model.EventId" class="btn btn-link">Cancel</a>
+</form>

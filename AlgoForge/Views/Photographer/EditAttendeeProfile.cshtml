@@ -1,0 +1,23 @@
+@model AlgoForge.ViewModels.Photographer.EditAttendeeProfileViewModel
+@{
+    ViewData["Title"] = "Edit Attendee Profile";
+}
+
+<h2 class="mb-4">Edit Attendee Profile</h2>
+
+<form asp-action="EditAttendeeProfile" method="post" class="col-md-6">
+    <input type="hidden" asp-for="EventMembershipId" />
+
+    <div class="mb-3">
+        <label asp-for="FullName" class="form-label"></label>
+        <input asp-for="FullName" class="form-control" />
+        <span asp-validation-for="FullName" class="text-danger"></span>
+    </div>
+
+    <div class="mb-3">
+        <label asp-for="Bio" class="form-label"></label>
+        <textarea asp-for="Bio" class="form-control" rows="3"></textarea>
+    </div>
+
+    <button type="submit" class="btn btn-primary">Save</button>
+</form>

@@ -1,0 +1,66 @@
+@model AlgoForge.ViewModels.Photographer.PhotographerDashboardViewModel
+@{
+    ViewData["Title"] = "Photographer Dashboard";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="mb-0">Your Events</h2>
+        <p class="text-muted mb-0">Across every organisation you shoot for.</p>
+    </div>
+    <div>
+        <a asp-action="JoinEvent" class="btn btn-outline-primary me-2">Join Event</a>
+        <a asp-action="CreateEvent" class="btn btn-primary">+ Create Event</a>
+    </div>
+</div>
+
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success">@TempData["Success"]</div>
+}
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-danger">@TempData["Error"]</div>
+}
+
+@if (!Model.Events.Any())
+{
+    <div class="card text-center p-5">
+        <p class="text-muted mb-3">You're not shooting any events yet.</p>
+        <div>
+            <a asp-action="CreateEvent" class="btn btn-primary">Create your first event</a>
+        </div>
+    </div>
+}
+else
+{
+    <div class="row g-3">
+        @foreach (var ev in Model.Events)
+        {
+            <div class="col-md-6 col-lg-4">
+                <div class="card h-100 shadow-sm">
+                    <div class="card-body">
+                        <span class="badge bg-secondary mb-2">@ev.OrganisationName</span>
+                        <h5 class="card-title">@ev.EventName</h5>
+                        <span class="badge bg-@(ev.Status == AlgoForge.Models.EventStatus.Live ? "success" : "info")">
+                            @ev.Status
+                        </span>
+                        <ul class="list-unstyled mt-3 mb-3 small text-muted">
+                            <li>@ev.AlbumCount album(s) &middot; @ev.PhotoCount photo(s)</li>
+                            @if (ev.UnidentifiedClusterCount > 0)
+                            {
+                                <li class="text-warning">
+                                    &#9888; @ev.UnidentifiedClusterCount unidentified face cluster(s)
+                                </li>
+                            }
+                        </ul>
+                        <div class="d-flex gap-2">
+                            <a asp-action="Albums" asp-route-eventId="@ev.EventId" class="btn btn-sm btn-outline-primary">Albums</a>
+                            <a asp-action="FaceClusters" asp-route-eventId="@ev.EventId" class="btn btn-sm btn-outline-secondary">Face Clusters</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}

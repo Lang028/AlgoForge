@@ -1,0 +1,22 @@
+@model AlgoForge.ViewModels.Photographer.UploadPhotosViewModel
+@{
+    ViewData["Title"] = "Upload Photos - " + Model.AlbumName;
+}
+
+<h2 class="mb-4">Upload Photos &mdash; @Model.AlbumName</h2>
+
+<form asp-action="UploadPhotos" method="post" enctype="multipart/form-data" class="col-md-8">
+    <input type="hidden" asp-for="AlbumId" />
+    <input type="hidden" asp-for="EventId" />
+
+    <div class="mb-3">
+        <label class="form-label">Select photos</label>
+        <input type="file" name="Files" class="form-control" multiple accept="image/*" required />
+        <div class="form-text">
+            Photos are queued for face detection after upload &mdash; a large batch won't block this page.
+        </div>
+    </div>
+
+    <button type="submit" class="btn btn-primary">Upload</button>
+    <a asp-action="Albums" asp-route-eventId="@Model.EventId" class="btn btn-link">Cancel</a>
+</form>

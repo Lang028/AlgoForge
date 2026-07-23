@@ -1,0 +1,14 @@
+html {
+  font-size: 15px;
+  position: relative;
+  min-height: 100%;
+}
+
+body {
+  margin-bottom: 60px;
+}
+
+.footer {
+  padding: 1rem 0;
+  font-size: 0.85rem;
+}

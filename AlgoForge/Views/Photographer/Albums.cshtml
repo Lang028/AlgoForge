@@ -1,0 +1,60 @@
+@model AlgoForge.ViewModels.Photographer.AlbumListViewModel
+@{
+    ViewData["Title"] = Model.EventName + " - Albums";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0">@Model.EventName &mdash; Albums</h2>
+    <a asp-action="Index" class="btn btn-link">&larr; Back to dashboard</a>
+</div>
+
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success">@TempData["Success"]</div>
+}
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-danger">@TempData["Error"]</div>
+}
+
+@if (!Model.UploadWindowOpen)
+{
+    <div class="alert alert-warning">
+        This event isn't Live &mdash; new photos can't be uploaded until the coordinator sets it Live.
+    </div>
+}
+
+<div class="card p-3 mb-4">
+    <form asp-action="CreateAlbum" method="post" class="row g-2 align-items-end">
+        <input type="hidden" name="EventId" value="@Model.EventId" />
+        <div class="col-auto flex-grow-1">
+            <label class="form-label">New album name</label>
+            <input name="Name" class="form-control" placeholder="e.g. Stage Photos" required />
+        </div>
+        <div class="col-auto">
+            <button type="submit" class="btn btn-primary">+ Create Album</button>
+        </div>
+    </form>
+</div>
+
+<div class="row g-3">
+    @foreach (var album in Model.Albums)
+    {
+        <div class="col-md-4">
+            <div class="card h-100">
+                @if (album.CoverThumbnailUrl != null)
+                {
+                    <img src="@album.CoverThumbnailUrl" class="card-img-top" style="height:160px;object-fit:cover;" />
+                }
+                <div class="card-body">
+                    <h5 class="card-title">@album.Name</h5>
+                    <p class="text-muted small">@album.PhotoCount photo(s)</p>
+                    <a asp-action="UploadPhotos" asp-route-albumId="@album.AlbumId"
+                       class="btn btn-sm btn-outline-primary @(Model.UploadWindowOpen ? "" : "disabled")">
+                        Upload Photos
+                    </a>
+                </div>
+            </div>
+        </div>
+    }
+</div>

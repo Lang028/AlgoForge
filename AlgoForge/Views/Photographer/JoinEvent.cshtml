@@ -1,0 +1,17 @@
+@model AlgoForge.ViewModels.Photographer.JoinEventViewModel
+@{
+    ViewData["Title"] = "Join Event";
+}
+
+<h2 class="mb-4">Join an Event</h2>
+<p class="text-muted">Paste the invitation code from your email &mdash; there are no open guest links.</p>
+
+<form asp-action="JoinEvent" method="post" class="col-md-6">
+    <div asp-validation-summary="All" class="text-danger"></div>
+    <div class="mb-3">
+        <label asp-for="InvitationToken" class="form-label"></label>
+        <input asp-for="InvitationToken" class="form-control" />
+    </div>
+    <button type="submit" class="btn btn-primary">Join</button>
+    <a asp-action="Index" class="btn btn-link">Cancel</a>
+</form>
