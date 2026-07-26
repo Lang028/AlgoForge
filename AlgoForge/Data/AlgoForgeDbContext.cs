@@ -17,8 +17,10 @@ namespace AlgoForge.Data
         public DbSet<EventMembership> EventMemberships => Set<EventMembership>();
         public DbSet<Attendee> Attendees => Set<Attendee>();
         public DbSet<Photo> Photos => Set<Photo>();
-        public DbSet<FaceCluster> FaceClusters => Set<FaceCluster>();
-        public DbSet<FaceDetection> FaceDetections => Set<FaceDetection>();
+        public DbSet<PersonCluster> PersonClusters => Set<PersonCluster>();
+        public DbSet<PersonDetection> PersonDetections => Set<PersonDetection>();
+        public DbSet<Tag> Tags => Set<Tag>();
+        public DbSet<Connection> Connections => Set<Connection>();
 
         protected override void OnModelCreating(ModelBuilder builder)
         {
@@ -55,6 +57,91 @@ namespace AlgoForge.Data
                 .WithMany()
                 .HasForeignKey(o => o.AdminUserId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            // Tag.CreatedByUser and Tag.TaggedAttendee both sit off ApplicationUser's FK
+            // graph indirectly -- restrict both so SQL Server doesn't reject multiple
+            // cascade paths, same pattern as EventMembership above.
+            builder.Entity<Tag>()
+                .HasOne(t => t.CreatedByUser)
+                .WithMany()
+                .HasForeignKey(t => t.CreatedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            builder.Entity<Tag>()
+                .HasOne(t => t.TaggedAttendee)
+                .WithMany()
+                .HasForeignKey(t => t.TaggedAttendeeId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            builder.Entity<Tag>()
+                .HasOne(t => t.PersonDetection)
+                .WithMany()
+                .HasForeignKey(t => t.PersonDetectionId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Reclustering deletes and rebuilds unidentified clusters on every run, so
+            // detections must survive their cluster being dropped -- SetNull, never
+            // Cascade. Cascade here would delete the detections and, through the Tag
+            // cascade above, silently destroy consent records on every recluster.
+            builder.Entity<PersonDetection>()
+                .HasOne(d => d.PersonCluster)
+                .WithMany(c => c.Detections)
+                .HasForeignKey(d => d.PersonClusterId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            builder.Entity<PersonDetection>()
+                .HasOne(d => d.Photo)
+                .WithMany(p => p.PersonDetections)
+                .HasForeignKey(d => d.PhotoId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            builder.Entity<PersonCluster>()
+                .HasOne(c => c.LinkedAttendee)
+                .WithMany()
+                .HasForeignKey(c => c.LinkedAttendeeId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            builder.Entity<PersonCluster>()
+                .HasOne(c => c.IdentifiedByUser)
+                .WithMany()
+                .HasForeignKey(c => c.IdentifiedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Every attendee-facing query filters on IsTaggable, and the review grid
+            // pages by cluster -- both are hot paths once an event has a few thousand
+            // detections.
+            builder.Entity<PersonDetection>()
+                .HasIndex(d => new { d.PhotoId, d.IsTaggable });
+
+            builder.Entity<PersonCluster>()
+                .HasIndex(c => new { c.EventId, c.Status });
+
+            // Both ends point at ApplicationUser -- restrict, same cascade-path reason as above.
+            builder.Entity<Connection>()
+                .HasOne(c => c.Requester)
+                .WithMany()
+                .HasForeignKey(c => c.RequesterId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            builder.Entity<Connection>()
+                .HasOne(c => c.Receiver)
+                .WithMany()
+                .HasForeignKey(c => c.ReceiverId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            builder.Entity<Connection>()
+                .HasOne(c => c.MetAtEvent)
+                .WithMany()
+                .HasForeignKey(c => c.MetAtEventId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // D10: one connection per pair of people, whichever direction it was asked in.
+            builder.Entity<Connection>()
+                .HasIndex(c => new { c.PairLowId, c.PairHighId })
+                .IsUnique();
+
+            builder.Entity<Connection>()
+                .HasIndex(c => c.ResponseToken);
         }
     }
 }

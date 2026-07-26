@@ -1,3 +1,5 @@
+# Core service + face signal. Required -- the pipeline has no product without a face,
+# because nothing is ever taggable without one.
 fastapi==0.115.6
 uvicorn[standard]==0.34.0
 insightface==0.7.3
@@ -5,3 +7,18 @@ onnxruntime==1.20.1
 numpy==1.26.4
 python-multipart==0.0.20
 Pillow==11.1.0
+opencv-python-headless==4.10.0.84
+
+# Person detection. Optional: without it, person boxes are synthesised from face boxes
+# and the appearance crop shrinks to head-and-shoulders.
+ultralytics==8.3.55
+
+# Appearance + head signal. Optional, and the heaviest install here (~2GB with torch).
+# Install torch from the CPU index first, or pip pulls the CUDA build:
+#   pip install torch==2.5.1 --index-url https://download.pytorch.org/whl/cpu
+torch==2.5.1
+torchreid==0.2.5
+
+# Fallback appearance backend if torchreid will not install (plan 4.4). Install this
+# instead of torchreid and embeddings.py picks it up automatically -- no code change.
+# open_clip_torch==2.30.0

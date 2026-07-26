@@ -364,6 +364,10 @@ FodyWeavers.xsd
 # AlgoForge: local upload storage, generated embedding sidecar files, Python venv
 AlgoForge/wwwroot/uploads/
 AlgoForge/App_Data/embeddings/
+# The sidecar store moved here when the Python service took ownership of it (D15).
+# These are biometric vectors -- they must never be committed.
+face_service/embeddings/
 face_service/.venv/
 face_service/__pycache__/
+face_service/.pytest_cache/
 .claude/

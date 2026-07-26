@@ -4,6 +4,7 @@ using AlgoForge.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace AlgoForge.Migrations
 {
     [DbContext(typeof(AlgoForgeDbContext))]
-    partial class AlgoForgeDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260725010653_AddTags")]
+    partial class AddTags
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -159,56 +162,6 @@ namespace AlgoForge.Migrations
                     b.ToTable("Attendees");
                 });
 
-            modelBuilder.Entity("AlgoForge.Models.Connection", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<Guid?>("MetAtEventId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid>("PairHighId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid>("PairLowId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid>("ReceiverId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid>("RequesterId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTime?>("RespondedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("ResponseToken")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<int>("Status")
-                        .HasColumnType("int");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("MetAtEventId");
-
-                    b.HasIndex("ReceiverId");
-
-                    b.HasIndex("RequesterId");
-
-                    b.HasIndex("ResponseToken");
-
-                    b.HasIndex("PairLowId", "PairHighId")
-                        .IsUnique();
-
-                    b.ToTable("Connections");
-                });
-
             modelBuilder.Entity("AlgoForge.Models.Event", b =>
                 {
                     b.Property<Guid>("Id")
@@ -270,6 +223,79 @@ namespace AlgoForge.Migrations
                     b.ToTable("EventMemberships");
                 });
 
+            modelBuilder.Entity("AlgoForge.Models.FaceCluster", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("EventId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("IdentifiedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("LinkedAttendeeId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("RepresentativeEmbeddingRef")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EventId");
+
+                    b.HasIndex("IdentifiedByUserId");
+
+                    b.HasIndex("LinkedAttendeeId");
+
+                    b.ToTable("FaceClusters");
+                });
+
+            modelBuilder.Entity("AlgoForge.Models.FaceDetection", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<double>("BoxHeight")
+                        .HasColumnType("float");
+
+                    b.Property<double>("BoxWidth")
+                        .HasColumnType("float");
+
+                    b.Property<double>("BoxX")
+                        .HasColumnType("float");
+
+                    b.Property<double>("BoxY")
+                        .HasColumnType("float");
+
+                    b.Property<double>("Confidence")
+                        .HasColumnType("float");
+
+                    b.Property<string>("EmbeddingRef")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid?>("FaceClusterId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("PhotoId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FaceClusterId");
+
+                    b.HasIndex("PhotoId");
+
+                    b.ToTable("FaceDetections");
+                });
+
             modelBuilder.Entity("AlgoForge.Models.Organisation", b =>
                 {
                     b.Property<Guid>("Id")
@@ -292,110 +318,6 @@ namespace AlgoForge.Migrations
                     b.HasIndex("AdminUserId");
 
                     b.ToTable("Organisations");
-                });
-
-            modelBuilder.Entity("AlgoForge.Models.PersonCluster", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid?>("AnchorDetectionId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid>("EventId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<bool>("HasTaggableDetection")
-                        .HasColumnType("bit");
-
-                    b.Property<Guid?>("IdentifiedByUserId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid?>("LinkedAttendeeId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<int>("Status")
-                        .HasColumnType("int");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("IdentifiedByUserId");
-
-                    b.HasIndex("LinkedAttendeeId");
-
-                    b.HasIndex("EventId", "Status");
-
-                    b.ToTable("PersonClusters");
-                });
-
-            modelBuilder.Entity("AlgoForge.Models.PersonDetection", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("AppearanceEmbeddingRef")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<double>("BoxHeight")
-                        .HasColumnType("float");
-
-                    b.Property<double>("BoxWidth")
-                        .HasColumnType("float");
-
-                    b.Property<double>("BoxX")
-                        .HasColumnType("float");
-
-                    b.Property<double>("BoxY")
-                        .HasColumnType("float");
-
-                    b.Property<double>("ClusterConfidence")
-                        .HasColumnType("float");
-
-                    b.Property<string>("FaceEmbeddingRef")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<double?>("FaceHeight")
-                        .HasColumnType("float");
-
-                    b.Property<double>("FaceQuality")
-                        .HasColumnType("float");
-
-                    b.Property<double?>("FaceWidth")
-                        .HasColumnType("float");
-
-                    b.Property<double?>("FaceX")
-                        .HasColumnType("float");
-
-                    b.Property<double?>("FaceY")
-                        .HasColumnType("float");
-
-                    b.Property<string>("HeadEmbeddingRef")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<bool>("IsTaggable")
-                        .HasColumnType("bit");
-
-                    b.Property<Guid?>("PersonClusterId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid>("PhotoId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<double>("ProminenceScore")
-                        .HasColumnType("float");
-
-                    b.Property<double>("Sharpness")
-                        .HasColumnType("float");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("PersonClusterId");
-
-                    b.HasIndex("PhotoId", "IsTaggable");
-
-                    b.ToTable("PersonDetections");
                 });
 
             modelBuilder.Entity("AlgoForge.Models.Photo", b =>
@@ -452,11 +374,11 @@ namespace AlgoForge.Migrations
                     b.Property<Guid>("CreatedByUserId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<Guid>("FaceDetectionId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<int>("Origin")
                         .HasColumnType("int");
-
-                    b.Property<Guid>("PersonDetectionId")
-                        .HasColumnType("uniqueidentifier");
 
                     b.Property<DateTime?>("ResolvedAt")
                         .HasColumnType("datetime2");
@@ -471,7 +393,7 @@ namespace AlgoForge.Migrations
 
                     b.HasIndex("CreatedByUserId");
 
-                    b.HasIndex("PersonDetectionId");
+                    b.HasIndex("FaceDetectionId");
 
                     b.HasIndex("TaggedAttendeeId");
 
@@ -638,32 +560,6 @@ namespace AlgoForge.Migrations
                     b.Navigation("Event");
                 });
 
-            modelBuilder.Entity("AlgoForge.Models.Connection", b =>
-                {
-                    b.HasOne("AlgoForge.Models.Event", "MetAtEvent")
-                        .WithMany()
-                        .HasForeignKey("MetAtEventId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("AlgoForge.Models.ApplicationUser", "Receiver")
-                        .WithMany()
-                        .HasForeignKey("ReceiverId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("AlgoForge.Models.ApplicationUser", "Requester")
-                        .WithMany()
-                        .HasForeignKey("RequesterId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("MetAtEvent");
-
-                    b.Navigation("Receiver");
-
-                    b.Navigation("Requester");
-                });
-
             modelBuilder.Entity("AlgoForge.Models.Event", b =>
                 {
                     b.HasOne("AlgoForge.Models.Organisation", "Organisation")
@@ -701,6 +597,46 @@ namespace AlgoForge.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("AlgoForge.Models.FaceCluster", b =>
+                {
+                    b.HasOne("AlgoForge.Models.Event", "Event")
+                        .WithMany("FaceClusters")
+                        .HasForeignKey("EventId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("AlgoForge.Models.ApplicationUser", "IdentifiedByUser")
+                        .WithMany()
+                        .HasForeignKey("IdentifiedByUserId");
+
+                    b.HasOne("AlgoForge.Models.Attendee", "LinkedAttendee")
+                        .WithMany()
+                        .HasForeignKey("LinkedAttendeeId");
+
+                    b.Navigation("Event");
+
+                    b.Navigation("IdentifiedByUser");
+
+                    b.Navigation("LinkedAttendee");
+                });
+
+            modelBuilder.Entity("AlgoForge.Models.FaceDetection", b =>
+                {
+                    b.HasOne("AlgoForge.Models.FaceCluster", "FaceCluster")
+                        .WithMany("Detections")
+                        .HasForeignKey("FaceClusterId");
+
+                    b.HasOne("AlgoForge.Models.Photo", "Photo")
+                        .WithMany("FaceDetections")
+                        .HasForeignKey("PhotoId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("FaceCluster");
+
+                    b.Navigation("Photo");
+                });
+
             modelBuilder.Entity("AlgoForge.Models.Organisation", b =>
                 {
                     b.HasOne("AlgoForge.Models.ApplicationUser", "AdminUser")
@@ -710,49 +646,6 @@ namespace AlgoForge.Migrations
                         .IsRequired();
 
                     b.Navigation("AdminUser");
-                });
-
-            modelBuilder.Entity("AlgoForge.Models.PersonCluster", b =>
-                {
-                    b.HasOne("AlgoForge.Models.Event", "Event")
-                        .WithMany("PersonClusters")
-                        .HasForeignKey("EventId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("AlgoForge.Models.ApplicationUser", "IdentifiedByUser")
-                        .WithMany()
-                        .HasForeignKey("IdentifiedByUserId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("AlgoForge.Models.Attendee", "LinkedAttendee")
-                        .WithMany()
-                        .HasForeignKey("LinkedAttendeeId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.Navigation("Event");
-
-                    b.Navigation("IdentifiedByUser");
-
-                    b.Navigation("LinkedAttendee");
-                });
-
-            modelBuilder.Entity("AlgoForge.Models.PersonDetection", b =>
-                {
-                    b.HasOne("AlgoForge.Models.PersonCluster", "PersonCluster")
-                        .WithMany("Detections")
-                        .HasForeignKey("PersonClusterId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.HasOne("AlgoForge.Models.Photo", "Photo")
-                        .WithMany("PersonDetections")
-                        .HasForeignKey("PhotoId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("PersonCluster");
-
-                    b.Navigation("Photo");
                 });
 
             modelBuilder.Entity("AlgoForge.Models.Photo", b =>
@@ -788,9 +681,9 @@ namespace AlgoForge.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("AlgoForge.Models.PersonDetection", "PersonDetection")
+                    b.HasOne("AlgoForge.Models.FaceDetection", "FaceDetection")
                         .WithMany()
-                        .HasForeignKey("PersonDetectionId")
+                        .HasForeignKey("FaceDetectionId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
@@ -802,7 +695,7 @@ namespace AlgoForge.Migrations
 
                     b.Navigation("CreatedByUser");
 
-                    b.Navigation("PersonDetection");
+                    b.Navigation("FaceDetection");
 
                     b.Navigation("TaggedAttendee");
                 });
@@ -869,11 +762,16 @@ namespace AlgoForge.Migrations
 
                     b.Navigation("Attendees");
 
+                    b.Navigation("FaceClusters");
+
                     b.Navigation("Memberships");
 
-                    b.Navigation("PersonClusters");
-
                     b.Navigation("Photos");
+                });
+
+            modelBuilder.Entity("AlgoForge.Models.FaceCluster", b =>
+                {
+                    b.Navigation("Detections");
                 });
 
             modelBuilder.Entity("AlgoForge.Models.Organisation", b =>
@@ -881,14 +779,9 @@ namespace AlgoForge.Migrations
                     b.Navigation("Events");
                 });
 
-            modelBuilder.Entity("AlgoForge.Models.PersonCluster", b =>
-                {
-                    b.Navigation("Detections");
-                });
-
             modelBuilder.Entity("AlgoForge.Models.Photo", b =>
                 {
-                    b.Navigation("PersonDetections");
+                    b.Navigation("FaceDetections");
                 });
 #pragma warning restore 612, 618
         }

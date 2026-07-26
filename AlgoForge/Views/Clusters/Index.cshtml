@@ -1,0 +1,117 @@
+@using System.Globalization
+@model List<AlgoForge.Models.PersonCluster>
+@{
+    ViewData["Title"] = "Identify people";
+    var eventId = ViewData["EventId"];
+    var eventName = ViewData["EventName"];
+    var attendees = ViewData["Attendees"] as List<AlgoForge.Models.Attendee> ?? new List<AlgoForge.Models.Attendee>();
+
+    string Pct(double value) => (value * 100).ToString(CultureInfo.InvariantCulture);
+
+    // Only Tier A detections reach this view (the controller filters the Include), so
+    // every crop shown here is someone clearly in frame.
+    AlgoForge.Models.PersonDetection? CoverOf(AlgoForge.Models.PersonCluster cluster) =>
+        cluster.Detections.FirstOrDefault(d => d.Id == cluster.AnchorDetectionId && d.Photo is not null)
+        ?? cluster.Detections.Where(d => d.Photo is not null)
+                             .OrderByDescending(d => d.ProminenceScore)
+                             .FirstOrDefault();
+}
+
+<div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+    <div>
+        <h2>@eventName &mdash; Identify people</h2>
+        <p class="text-muted mb-0">
+            Link each group to someone on the invitee list. Linking suggests tags across every photo
+            that person is clearly visible in &mdash; they still have to confirm before anything is final.
+        </p>
+    </div>
+    <form method="post" asp-action="Recluster" asp-route-eventId="@eventId">
+        <button type="submit" class="btn btn-outline-secondary">Re-cluster event</button>
+    </form>
+</div>
+
+@if (TempData["SuccessMessage"] is string success)
+{
+    <div class="alert alert-success mt-3">@success</div>
+}
+@if (TempData["ErrorMessage"] is string error)
+{
+    <div class="alert alert-danger mt-3">@error</div>
+}
+
+<style>
+    .cluster-card { max-width: 340px; }
+    .cluster-photo { position: relative; line-height: 0; }
+    .cluster-photo img { max-width: 100%; display: block; }
+    .cluster-face-box { position: absolute; border: 2px solid #ffc107; box-sizing: border-box; }
+    .shaky { border-left: 3px solid #dc3545; padding-left: .5rem; }
+</style>
+
+@if (!Model.Any())
+{
+    <p class="mt-3">No people grouped yet &mdash; upload photos first, then re-cluster.</p>
+}
+else
+{
+    <div class="d-flex flex-wrap gap-3 mt-3">
+        @foreach (var cluster in Model)
+        {
+            var cover = CoverOf(cluster);
+            var photoCount = cluster.Detections.Select(d => d.PhotoId).Distinct().Count();
+            @* Ascending confidence: the shakiest attachment is the one most likely to be
+               the wrong person, so it is what the photographer should be checking. *@
+            var weakest = cluster.Detections.Where(d => d.ClusterConfidence > 0)
+                                            .OrderBy(d => d.ClusterConfidence)
+                                            .FirstOrDefault();
+
+            <div class="card cluster-card">
+                @if (cover?.Photo is not null)
+                {
+                    <div class="cluster-photo">
+                        <img src="@cover.Photo.BlobUrl" alt="Representative photo" />
+                        <div class="cluster-face-box"
+                             style="left: @Pct(cover.FaceX ?? cover.BoxX)%; top: @Pct(cover.FaceY ?? cover.BoxY)%; width: @Pct(cover.FaceWidth ?? cover.BoxWidth)%; height: @Pct(cover.FaceHeight ?? cover.BoxHeight)%;"></div>
+                    </div>
+                }
+                <div class="card-body">
+                    <p class="mb-1">Clearly visible in @photoCount photo(s)</p>
+
+                    @if (weakest is not null && weakest.ClusterConfidence < 0.7)
+                    {
+                        <p class="small text-muted shaky mb-2">
+                            Weakest match @weakest.ClusterConfidence.ToString("0.00", CultureInfo.InvariantCulture)
+                            &mdash; worth a check before identifying.
+                        </p>
+                    }
+
+                    @if (cluster.Status == AlgoForge.Models.PersonClusterStatus.Identified)
+                    {
+                        <span class="badge bg-success">Identified: @cluster.LinkedAttendee?.Name</span>
+                    }
+                    else
+                    {
+                        <form method="post" asp-action="Identify" asp-route-eventId="@eventId">
+                            <input type="hidden" name="clusterId" value="@cluster.Id" />
+                            <div class="input-group mb-2">
+                                <select name="attendeeId" class="form-select" required>
+                                    <option value="">Who is this?</option>
+                                    @foreach (var attendee in attendees)
+                                    {
+                                        <option value="@attendee.Id">@attendee.Name</option>
+                                    }
+                                </select>
+                                <button type="submit" class="btn btn-primary">Identify</button>
+                            </div>
+                        </form>
+                        <form method="post" asp-action="Ignore" asp-route-eventId="@eventId">
+                            <input type="hidden" name="clusterId" value="@cluster.Id" />
+                            <button type="submit" class="btn btn-sm btn-outline-secondary">Not an attendee</button>
+                        </form>
+                    }
+                </div>
+            </div>
+        }
+    </div>
+}
+
+<p class="mt-3"><a asp-controller="Photos" asp-action="Index" asp-route-eventId="@eventId">Back to gallery</a></p>

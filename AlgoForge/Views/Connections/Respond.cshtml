@@ -1,0 +1,40 @@
+@model AlgoForge.Models.Connection
+@{
+    ViewData["Title"] = "Connection request";
+    var requesterName = string.IsNullOrWhiteSpace(Model.Requester?.DisplayName) ? "Someone" : Model.Requester!.DisplayName;
+}
+
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <h2>Connection request</h2>
+
+        @if (Model.Status != AlgoForge.Models.ConnectionStatus.Pending)
+        {
+            <p class="text-muted">
+                You already
+                @(Model.Status == AlgoForge.Models.ConnectionStatus.Accepted ? "accepted" : "declined")
+                this request.
+            </p>
+            <a class="btn btn-outline-secondary" asp-action="Index">Back to my connections</a>
+        }
+        else
+        {
+            <p class="lead">
+                <strong>@requesterName</strong> wants to connect with you@(Model.MetAtEvent is null ? "" : $" — you met at {Model.MetAtEvent.Name}").
+            </p>
+            <p class="text-muted">
+                Accepting shares your email and contact details with them, and theirs with you.
+                Declining shares nothing. Either way, the event photos stay exactly as they are.
+            </p>
+
+            <div class="d-flex gap-2">
+                <form method="post" asp-action="Accept" asp-route-connectionId="@Model.Id">
+                    <button type="submit" class="btn btn-primary">Accept and share details</button>
+                </form>
+                <form method="post" asp-action="Decline" asp-route-connectionId="@Model.Id">
+                    <button type="submit" class="btn btn-outline-secondary">Decline</button>
+                </form>
+            </div>
+        }
+    </div>
+</div>
