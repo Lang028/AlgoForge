@@ -4,6 +4,12 @@
 }
 
 <h2>Events</h2>
+<a class="btn btn-primary mb-3" asp-action="Create">Create event</a>
+
+@if (TempData["SuccessMessage"] is string success)
+{
+    <div class="alert alert-success">@success</div>
+}
 
 @if (!Model.Any())
 {
@@ -32,6 +38,8 @@ else
                     <td>
                         <a class="btn btn-sm btn-primary" asp-controller="Photos" asp-action="Index" asp-route-eventId="@evt.Id">Gallery</a>
                         <a class="btn btn-sm btn-outline-primary" asp-controller="Photos" asp-action="Upload" asp-route-eventId="@evt.Id">Upload</a>
+                        <a class="btn btn-sm btn-outline-secondary" asp-action="Attendees" asp-route-eventId="@evt.Id">Attendees</a>
+                        <a class="btn btn-sm btn-outline-secondary" asp-action="ImportAttendees" asp-route-eventId="@evt.Id">Import CSV</a>
                     </td>
                 </tr>
             }

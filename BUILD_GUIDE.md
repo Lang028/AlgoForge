@@ -112,6 +112,31 @@ Budget reality: Azure for Students credit only, minimise burn.
 - **Email:** free tier of a transactional provider (Brevo 300/day or Resend) — see OPEN-6.
 Expected monthly spend until Demo Day week: ~R0.
 
+### D20. Gallery visibility vs. contact visibility are separate things — LOCKED
+The gallery is a normal, complete photo gallery: **every visible photo is shown to every event member, always**, regardless of who has connected with whom. Connections share *contact details*, never access to pictures.
+
+What consent gates is **identity, not the photograph**:
+- A name appears on a face **only where its Tag is `Confirmed`**. Suggested tags (identified by the coordinator, not yet agreed to) and unidentified faces render **no box at all** — they're reported as an aggregate "N faces not shown pending consent" count and nothing more.
+- Deliberately *not* read from `FaceCluster.LinkedAttendeeId`: doing so named people the moment a coordinator identified them (before consent) and kept naming them after they rejected the tag. Reading the tag status makes Reject actually do something visible, which is the demo's turning point.
+- Coordinators and photographers do identification work in `/Clusters`, which is where unconfirmed faces belong. The gallery stays consent-clean for everyone, including staff.
+
+**Connect from a face** (implements D10/D11/D12): click a confirmed face → Connect → the receiver gets an email with a tokenized accept/decline link → on accept, **both** sides get the other's contact details by email, and the details also appear in-app on the face panel and in `/Connections`. Contact fields are stripped server-side, so an un-accepted viewer's browser never receives them at all. A request can only be sent to someone who has a `Confirmed` tag in that event — otherwise a guessed attendee id would let you reach someone who never consented to being identified.
+
+The emailed link lands on a confirmation page rather than accepting on GET, so a mail client prefetching links can't accept on the recipient's behalf.
+
+### D21. Person matching: face + appearance fusion, behind a prominence gate — LOCKED
+Full spec in `docs/PERSON_MATCHING_PLAN.md`. Supersedes the face-only pipeline and resolves OPEN-3/OPEN-4.
+
+The idea came from the team: rather than matching on the face alone, match on the whole person — clothing, hair, build — because none of that changes during a one-day event. That is textbook person re-identification, and the within-event constraint is exactly what makes it reliable.
+
+- **Two co-equal signals, fused per pair.** Face (ArcFace) and appearance (OSNet over the whole person crop, head included), plus a dedicated head/hair crop that works from behind. The face's weight scales with its quality in *that pair*, so a sharp frontal pair is face-dominated and a soft profile pair is appearance-dominated.
+- **Appearance can never mint or override an identity.** Phase 1 builds anchor clusters from confident faces only; everything else attaches to those. Two confident faces that disagree is an absolute veto — otherwise uniforms, dress codes and same-hair collisions would merge strangers.
+- **The prominence gate (`IsTaggable`) decides what anyone ever sees.** Tier A = face present, sharp enough, big enough, not a hard profile. Tier B (backshots, blurry background figures, passers-by) is stored as internal clustering evidence and is **never** taggable and never rendered in an attendee-facing view. Someone who avoided the camera all day is never surfaced by their outfit. Enforced in the service layer and in every attendee-facing query, with tests.
+- **Precision over recall on merges.** A false merge suggests someone else's tags to an attendee — a consent failure. A false split just needs the photographer's merge tool.
+- **No demographic attributes, ever.** Skin tone, race and gender are never columns or labels; appearance lives only inside opaque embedding vectors. Under POPIA that is the defensible posture, and it carries more nuance than any label would.
+
+> Note on D16: detection currently runs **synchronously in the upload request**, which D16 forbids. This is a deliberate, temporary shortcut — at ~1–3s per photo a large batch will time out. The two calls into Python are the only I/O boundary in `PersonPipelineService`, so moving them behind a queue is a change to the call sites, not to any logic.
+
 ---
 
 ## 3. Domain model
@@ -128,15 +153,15 @@ Thirteen entities. Full ERD lives in `docs/erd/` — **the ERD must be updated t
 | Invitation | Email invite (organisation or role invites) | EventId, Email, Role, Token, Status, ExpiresAt |
 | Album | Grouping within an event | EventId, Name |
 | Photo | One uploaded photograph | EventId, AlbumId (nullable), UploadedByUserId, BlobUrl, CapturedAt, UploadedAt, Status (Visible/Hidden, D8) |
-| FaceDetection | One face in one photo | PhotoId, FaceClusterId (nullable), BoundingBox, EmbeddingRef, Confidence |
-| FaceCluster | One person across an event's photos | EventId, Status (Unidentified/Identified), **LinkedAttendeeId (nullable)**, IdentifiedByUserId |
-| Tag | One consent decision | FaceDetectionId, **TaggedAttendeeId**, Status (Suggested/Confirmed/Rejected), Origin (ClusterMatch/SelfTag), CreatedByUserId, ResolvedAt |
+| **PersonDetection** | One *person* in one photo (was FaceDetection — D21) | PhotoId, PersonClusterId (nullable), person box, face box (nullable), FaceQuality, Sharpness, ProminenceScore, **IsTaggable**, three embedding refs, ClusterConfidence |
+| **PersonCluster** | One person across an event's photos (was FaceCluster) | EventId, Status (Unidentified/Identified/Ignored), AnchorDetectionId, **HasTaggableDetection**, **LinkedAttendeeId (nullable)**, IdentifiedByUserId |
+| Tag | One consent decision | **PersonDetectionId**, **TaggedAttendeeId**, Status (Suggested/Confirmed/Rejected), Origin (ClusterMatch/SelfTag), CreatedByUserId, ResolvedAt |
 | Connection | Global link between two claimed users | RequesterId, ReceiverId, MetAtEventId, Status, RespondedAt |
 | Comment | Event comment on a photo | PhotoId, AuthorUserId, Body, CreatedAt |
 
 Notes:
 - Attendee claim flow: invite email carries `InviteToken` → person registers/logs in → `ClaimedByUserId` set → an `EventMembership(Role=Attendee)` is created. Membership rows for attendees exist only after claiming.
-- "View Unidentified Clusters" = `WHERE Status = 'Unidentified'` on FaceCluster.
+- "View Unidentified Clusters" = `WHERE Status = 'Unidentified'` on PersonCluster — and always `AND HasTaggableDetection = 1` (D21): a group made purely of Tier B detections is not offered for identification at all.
 - No Notification table, by design (D12) — notifications are emails derived from state changes.
 
 ---
@@ -169,11 +194,11 @@ Python worker (containerised, InsightFace)
 
 **OPEN-2. Worker hosting.** ~~RESOLVED → D19: worker runs locally on a team laptop; Container Apps deployment is an optional stretch goal, not a dependency.~~
 
-**OPEN-3. Clustering algorithm.** InsightFace produces embeddings; grouping is separate. Default direction: DBSCAN/HDBSCAN over cosine similarity (cluster count unknown up front). Thresholds need experimentation.
+**OPEN-3. Clustering algorithm.** ~~DBSCAN/HDBSCAN over cosine similarity.~~ RESOLVED → D21: two-phase clustering over a fused face + appearance + hair similarity, not a generic density algorithm. See `docs/PERSON_MATCHING_PLAN.md` §5.
 
-**OPEN-4. Incremental clustering.** When 50 new photos arrive after initial clustering: full re-cluster vs assign-to-existing-clusters. ⚠️ **Constraint: existing FaceCluster IDs must remain stable once a cluster is Identified** — re-clustering that changes IDs orphans Tags and destroys consent data. Hardest open problem in the project.
+**OPEN-4. Incremental clustering.** ~~Full re-cluster vs assign-to-existing.~~ RESOLVED → D21: **full re-cluster every time, with reconciliation.** The constraint (identified cluster IDs must survive, or Tags orphan and consent data dies) is met by matching new groups onto existing rows by membership overlap rather than by making the algorithm incremental — clusters a human has acted on keep their Id, unidentified ones are rebuilt freely. Implemented in `PersonPipelineService.ReclusterEventAsync`.
 
-**OPEN-5. Pipeline failure handling.** Worker dies mid-batch / corrupt image / zero faces found — retry policy, dead-lettering, and what the UI shows.
+**OPEN-5. Pipeline failure handling.** Partially addressed: a detection failure marks the photo `Failed` and never takes the upload down with it, and clustering failure leaves the photos saved with a **Re-cluster** button to retry. Still open: retry policy and dead-lettering, which only become real once the queue exists (see D16 note below).
 
 **OPEN-6. Email provider.** Which SMTP service, and sender-domain setup so invite links don't land in spam (D12 makes this critical path, not a nice-to-have).
 
@@ -222,4 +247,4 @@ Deliberately out of scope. These go in the requirements doc as scoped decisions,
 
 ---
 
-*Last updated: 13 July 2026 — after the flow correction session (Attendee/User split, coordinator-primary identification, email-first notifications, attendee-controlled contact visibility, delegate downloads, D7 rewrite). Next update expected after the face pipeline session.*
+*Last updated: 25 July 2026 — added D21 (person matching: face + appearance fusion behind a prominence gate), resolving OPEN-3 and OPEN-4 and renaming FaceDetection/FaceCluster to PersonDetection/PersonCluster. Milestones M1–M3 of `docs/PERSON_MATCHING_PLAN.md` are built; M4 (merge/split, constraint persistence) and M5 (calibration on a pilot set) are not. Earlier that day: D20 (confirmed-tags-only gallery labels; connect-from-a-face contact exchange). Previous update 13 July 2026, after the flow correction session.*

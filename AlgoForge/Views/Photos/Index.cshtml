@@ -1,93 +1,442 @@
-@using System.Globalization
-@model List<AlgoForge.Models.Photo>
+@using AlgoForge.ViewModels.Photos
+@model GalleryViewModel
 @{
-    ViewData["Title"] = "Gallery";
-    var eventId = ViewData["EventId"];
-    var eventName = ViewData["EventName"];
-    var clusterLabels = ViewData["ClusterLabels"] as Dictionary<Guid, string> ?? new Dictionary<Guid, string>();
+    ViewData["Title"] = Model.EventName + " — Gallery";
 
-    string Pct(double value) => (value * 100).ToString(CultureInfo.InvariantCulture);
+    // Only what the viewer is allowed to know reaches the browser: the controller has already
+    // stripped contact details for anyone they aren't connected to (D11).
+    var payload = new
+    {
+        eventId = Model.EventId,
+        photos = Model.Photos.Select(p => new
+        {
+            id = p.Id,
+            url = p.Url,
+            faces = p.Faces.Select(f => new
+            {
+                name = f.Name,
+                attendeeId = f.AttendeeId,
+                x = f.BoxX,
+                y = f.BoxY,
+                w = f.BoxWidth,
+                h = f.BoxHeight,
+                state = f.State.ToString(),
+                connectionId = f.ConnectionId,
+                email = f.ContactEmail,
+                contact = f.ContactInfo,
+                optIn = f.ContactsSharedByOptIn
+            })
+        })
+    };
 }
-
-<h2>@eventName &mdash; Gallery</h2>
-<a class="btn btn-primary mb-3" asp-action="Upload" asp-route-eventId="@eventId">Upload photos</a>
 
 <style>
-    .photo-card {
+    /* Photography is the hero: warm greys, one red accent, no gradients or glow. */
+    .gallery {
+        --surface: #14120f;
+        --surface-raised: #1d1a16;
+        --line: #2e2a24;
+        --ink: #f2ede5;
+        --ink-dim: #a39a8c;
+        --accent: #c8442e;
+
+        background: var(--surface);
+        color: var(--ink);
+        margin: -2rem calc(50% - 50vw) 0;
+        padding: 2.5rem calc(50vw - 50% + 1rem) 4rem;
+        min-height: 90vh;
+    }
+
+    .gallery-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 1rem;
+        border-bottom: 1px solid var(--line);
+        padding-bottom: 1.25rem;
+        margin-bottom: 2rem;
+    }
+
+    .gallery-head h1 {
+        font-size: 1.75rem;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+        margin: 0;
+    }
+
+    .gallery-meta {
+        color: var(--ink-dim);
+        font-size: 0.875rem;
+        margin: 0.35rem 0 0;
+    }
+
+    .gallery-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+
+    .g-btn {
+        border: 1px solid var(--line);
+        background: transparent;
+        color: var(--ink);
+        padding: 0.45rem 0.9rem;
+        border-radius: 2px;
+        font-size: 0.875rem;
+        text-decoration: none;
+        cursor: pointer;
+        transition: border-color 0.15s, background 0.15s;
+    }
+    .g-btn:hover { border-color: var(--ink-dim); color: var(--ink); background: var(--surface-raised); }
+    .g-btn--accent { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .g-btn--accent:hover { background: #b13a27; border-color: #b13a27; color: #fff; }
+
+    .gallery-grid { columns: 4; column-gap: 10px; }
+    @@media (max-width: 1200px) { .gallery-grid { columns: 3; } }
+    @@media (max-width: 800px)  { .gallery-grid { columns: 2; } }
+    @@media (max-width: 480px)  { .gallery-grid { columns: 1; } }
+
+    .tile {
+        break-inside: avoid;
+        margin: 0 0 10px;
         position: relative;
-        display: inline-block;
-        margin: 0.5rem;
+        cursor: zoom-in;
+        background: var(--surface-raised);
         line-height: 0;
     }
+    .tile img { width: 100%; display: block; transition: opacity 0.2s; }
+    .tile:hover img { opacity: 0.82; }
 
-    .photo-card img {
-        max-width: 320px;
-        display: block;
-    }
-
-    .face-box {
+    .tile-badge {
         position: absolute;
-        border: 2px solid #0d6efd;
-        box-sizing: border-box;
-    }
-
-    .face-box .face-label {
-        position: absolute;
-        top: -1.6rem;
-        left: 0;
-        background: #0d6efd;
-        color: #fff;
-        font-size: 0.75rem;
-        padding: 0.1rem 0.4rem;
-        border-radius: 0.2rem;
-        white-space: nowrap;
+        left: 0.5rem;
+        bottom: 0.5rem;
+        background: rgba(20, 18, 15, 0.85);
+        color: var(--ink);
+        font-size: 0.72rem;
+        line-height: 1.4;
+        padding: 0.15rem 0.45rem;
+        border-radius: 2px;
         opacity: 0;
-        pointer-events: none;
-        transition: opacity 0.15s ease-in-out;
+        transition: opacity 0.15s;
+    }
+    .tile:hover .tile-badge { opacity: 1; }
+
+    .tile-status {
+        position: absolute;
+        top: 0.5rem;
+        left: 0.5rem;
+        font-size: 0.7rem;
+        padding: 0.15rem 0.45rem;
+        border-radius: 2px;
+        background: rgba(20, 18, 15, 0.85);
+        color: var(--ink-dim);
+        line-height: 1.4;
     }
 
-    .face-box:hover {
-        border-color: #ffc107;
-        z-index: 2;
+    .gallery-empty { color: var(--ink-dim); padding: 4rem 0; text-align: center; }
+
+    /* Lightbox */
+    .lb { position: fixed; inset: 0; background: rgba(10, 9, 8, 0.97); z-index: 1080; display: none; }
+    .lb.open { display: flex; flex-direction: column; }
+    .lb-bar { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem 1.25rem; color: #a39a8c; font-size: 0.85rem; }
+    .lb-close { background: none; border: none; color: #a39a8c; font-size: 1.5rem; line-height: 1; cursor: pointer; padding: 0 0.5rem; }
+    .lb-close:hover { color: #f2ede5; }
+
+    .lb-body { flex: 1; display: flex; gap: 1.5rem; padding: 0 1.25rem 1.25rem; min-height: 0; }
+    @@media (max-width: 900px) { .lb-body { flex-direction: column; } }
+
+    .lb-stage { flex: 1; display: flex; align-items: center; justify-content: center; min-height: 0; position: relative; }
+    .lb-frame { position: relative; line-height: 0; max-height: 100%; }
+    .lb-frame img { max-width: 100%; max-height: 78vh; display: block; }
+
+    .lb-face {
+        position: absolute;
+        border: 1.5px solid rgba(242, 237, 229, 0.45);
+        border-radius: 2px;
+        cursor: pointer;
+        transition: border-color 0.15s;
+    }
+    .lb-face:hover, .lb-face.active { border-color: var(--lb-accent, #c8442e); border-width: 2px; }
+    .lb-face span {
+        position: absolute;
+        top: 100%;
+        left: -1.5px;
+        margin-top: 3px;
+        background: rgba(10, 9, 8, 0.9);
+        color: #f2ede5;
+        font-size: 0.72rem;
+        line-height: 1.5;
+        padding: 0.1rem 0.4rem;
+        white-space: nowrap;
+        border-radius: 2px;
     }
 
-    .face-box:hover .face-label {
-        opacity: 1;
+    .lb-panel {
+        width: 300px;
+        flex-shrink: 0;
+        background: #1d1a16;
+        border: 1px solid #2e2a24;
+        border-radius: 2px;
+        padding: 1.25rem;
+        color: #f2ede5;
+        font-size: 0.875rem;
+        align-self: flex-start;
+        max-height: 100%;
+        overflow-y: auto;
     }
+    @@media (max-width: 900px) { .lb-panel { width: 100%; } }
+
+    .lb-panel h3 { font-size: 1.05rem; margin: 0 0 0.15rem; font-weight: 600; }
+    .lb-panel .muted { color: #a39a8c; font-size: 0.8rem; }
+    .lb-panel dl { margin: 0.75rem 0 0; }
+    .lb-panel dt { color: #a39a8c; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; margin-top: 0.65rem; }
+    .lb-panel dd { margin: 0.1rem 0 0; word-break: break-word; }
+    .lb-panel dd a { color: #f2ede5; }
+    .lb-panel form { display: inline; }
+    .lb-hint { color: #a39a8c; font-size: 0.8rem; }
+    .lb-arrow {
+        position: absolute; top: 50%; transform: translateY(-50%);
+        background: none; border: none; color: #a39a8c; font-size: 2rem; cursor: pointer; padding: 0 0.75rem;
+    }
+    .lb-arrow:hover { color: #f2ede5; }
+    .lb-arrow--prev { left: 0; }
+    .lb-arrow--next { right: 0; }
 </style>
 
-@if (!Model.Any())
-{
-    <p>No photos yet. <a asp-action="Upload" asp-route-eventId="@eventId">Upload the first one.</a></p>
-}
-else
-{
-    <div class="d-flex flex-wrap">
-        @foreach (var photo in Model)
-        {
-            <div class="photo-card">
-                <img src="@photo.BlobUrl" alt="Event photo" />
+<div class="gallery">
+    @if (TempData["SuccessMessage"] is string success)
+    {
+        <div class="alert alert-success">@success</div>
+    }
+    @if (TempData["ErrorMessage"] is string error)
+    {
+        <div class="alert alert-warning">@error</div>
+    }
 
-                @if (photo.FaceProcessingStatus == AlgoForge.Models.PhotoFaceProcessingStatus.Pending)
+    <div class="gallery-head">
+        <div>
+            <h1>@Model.EventName</h1>
+            <p class="gallery-meta">
+                @Model.Photos.Count photo@(Model.Photos.Count == 1 ? "" : "s")
+                &middot; @Model.ConfirmedPeopleCount @(Model.ConfirmedPeopleCount == 1 ? "person has" : "people have") confirmed their tags
+                @if (Model.AwaitingConsentCount > 0)
                 {
-                    <span class="badge bg-secondary position-absolute top-0 start-0 m-1">Processing&hellip;</span>
+                    <text>&middot; @Model.AwaitingConsentCount face@(Model.AwaitingConsentCount == 1 ? "" : "s") not shown pending consent</text>
                 }
-                else if (photo.FaceProcessingStatus == AlgoForge.Models.PhotoFaceProcessingStatus.Failed)
-                {
-                    <span class="badge bg-danger position-absolute top-0 start-0 m-1">Detection failed</span>
-                }
-
-                @foreach (var detection in photo.FaceDetections)
-                {
-                    var label = detection.FaceClusterId.HasValue && clusterLabels.TryGetValue(detection.FaceClusterId.Value, out var name)
-                        ? name
-                        : "Unknown";
-
-                    <div class="face-box" style="left: @Pct(detection.BoxX)%; top: @Pct(detection.BoxY)%; width: @Pct(detection.BoxWidth)%; height: @Pct(detection.BoxHeight)%;">
-                        <span class="face-label">@label</span>
-                    </div>
-                }
-            </div>
-        }
+            </p>
+        </div>
+        <div class="gallery-actions">
+            <a class="g-btn" asp-controller="Connections" asp-action="Index">My connections</a>
+            <a class="g-btn" asp-controller="Tags" asp-action="Index" asp-route-eventId="@Model.EventId">My tags</a>
+            <a class="g-btn" asp-controller="Clusters" asp-action="Index" asp-route-eventId="@Model.EventId">Identify people</a>
+            <a class="g-btn g-btn--accent" asp-action="Upload" asp-route-eventId="@Model.EventId">Upload photos</a>
+        </div>
     </div>
+
+    @if (!Model.Photos.Any())
+    {
+        <p class="gallery-empty">No photos in this event yet.</p>
+    }
+    else
+    {
+        <div class="gallery-grid">
+            @for (var i = 0; i < Model.Photos.Count; i++)
+            {
+                var photo = Model.Photos[i];
+                <figure class="tile" data-index="@i">
+                    <img src="@photo.Url" alt="Event photo" loading="lazy" />
+                    @if (photo.Faces.Any())
+                    {
+                        <figcaption class="tile-badge">@string.Join(", ", photo.Faces.Select(f => f.Name))</figcaption>
+                    }
+                </figure>
+            }
+        </div>
+    }
+</div>
+
+<div class="lb" id="lightbox" aria-hidden="true">
+    <div class="lb-bar">
+        <span id="lbCounter"></span>
+        <span class="lb-hint">Click a face to see who it is &middot; Esc to close</span>
+        <button type="button" class="lb-close" id="lbClose" aria-label="Close">&times;</button>
+    </div>
+    <div class="lb-body">
+        <div class="lb-stage">
+            <button type="button" class="lb-arrow lb-arrow--prev" id="lbPrev" aria-label="Previous">&lsaquo;</button>
+            <div class="lb-frame" id="lbFrame">
+                <img id="lbImage" alt="Event photo" />
+            </div>
+            <button type="button" class="lb-arrow lb-arrow--next" id="lbNext" aria-label="Next">&rsaquo;</button>
+        </div>
+        <aside class="lb-panel" id="lbPanel"></aside>
+    </div>
+</div>
+
+@* One token, reused by every form the panel builds. *@
+<form id="antiforgeryHost" style="display:none">@Html.AntiForgeryToken()</form>
+
+@section Scripts {
+<script>
+    (function () {
+        const data = @Json.Serialize(payload);
+        const token = document.querySelector('#antiforgeryHost input[name="__RequestVerificationToken"]').value;
+        const eventId = data.eventId;
+
+        const lb = document.getElementById('lightbox');
+        const image = document.getElementById('lbImage');
+        const frame = document.getElementById('lbFrame');
+        const panel = document.getElementById('lbPanel');
+        const counter = document.getElementById('lbCounter');
+
+        let current = 0;
+        let selectedFace = null;
+
+        const escape = (value) => {
+            const div = document.createElement('div');
+            div.textContent = value ?? '';
+            return div.innerHTML;
+        };
+
+        const postForm = (action, label, className) => `
+            <form method="post" action="${action}">
+                <input type="hidden" name="__RequestVerificationToken" value="${escape(token)}" />
+                <input type="hidden" name="returnEventId" value="${escape(eventId)}" />
+                <button type="submit" class="g-btn ${className}">${label}</button>
+            </form>`;
+
+        const contactBlock = (face) => {
+            const rows = [];
+            if (face.email) {
+                rows.push(`<dt>Email</dt><dd><a href="mailto:${escape(face.email)}">${escape(face.email)}</a></dd>`);
+            }
+            if (face.contact) {
+                rows.push(`<dt>Contact</dt><dd>${escape(face.contact)}</dd>`);
+            }
+            return rows.length ? `<dl>${rows.join('')}</dl>` : '';
+        };
+
+        const panelFor = (face) => {
+            const name = escape(face.name);
+            let body = '';
+
+            switch (face.state) {
+                case 'Self':
+                    body = `<p class="muted">This is you.</p>${contactBlock(face)}`;
+                    break;
+                case 'NoAccount':
+                    body = `<p class="muted">${name} hasn't claimed their invite yet, so there's no account to connect with.</p>`;
+                    break;
+                case 'Open':
+                    body = `<p class="muted">You can ask ${name} to share their contact details.</p>
+                        <form method="post" action="/Connections/Request">
+                            <input type="hidden" name="__RequestVerificationToken" value="${escape(token)}" />
+                            <input type="hidden" name="eventId" value="${escape(eventId)}" />
+                            <input type="hidden" name="attendeeId" value="${escape(face.attendeeId)}" />
+                            <button type="submit" class="g-btn g-btn--accent">Connect</button>
+                        </form>`;
+                    break;
+                case 'Sent':
+                    body = `<p class="muted">Request sent. You'll get their details by email once they accept.</p>`;
+                    break;
+                case 'AwaitingYou':
+                    body = `<p class="muted">${name} asked to connect with you.</p>
+                        <div style="display:flex; gap:0.5rem; margin-top:0.5rem;">
+                            ${postForm('/Connections/' + face.connectionId + '/Accept', 'Accept', 'g-btn--accent')}
+                            ${postForm('/Connections/' + face.connectionId + '/Decline', 'Decline', '')}
+                        </div>`;
+                    break;
+                case 'Connected':
+                    body = `<p class="muted">Connected &mdash; details shared both ways.</p>${contactBlock(face)}`;
+                    break;
+                case 'Declined':
+                    body = `<p class="muted">Not connected.</p>`;
+                    break;
+            }
+
+            const sub = face.optIn
+                ? '<p class="muted">Shared openly with event members by their own choice.</p>'
+                : '';
+
+            return `<h3>${name}</h3>${sub}${body}`;
+        };
+
+        const emptyPanel = (photo) => {
+            if (!photo.faces.length) {
+                return `<h3>No one tagged here</h3>
+                        <p class="muted">Faces only appear once the person has confirmed the tag.</p>`;
+            }
+            return `<h3>${photo.faces.length} ${photo.faces.length === 1 ? 'person' : 'people'}</h3>
+                    <p class="muted">Click a face to see who it is and connect.</p>`;
+        };
+
+        const render = () => {
+            const photo = data.photos[current];
+            image.src = photo.url;
+            counter.textContent = `${current + 1} / ${data.photos.length}`;
+
+            frame.querySelectorAll('.lb-face').forEach(el => el.remove());
+
+            photo.faces.forEach((face, index) => {
+                const box = document.createElement('div');
+                box.className = 'lb-face';
+                box.style.left = (face.x * 100) + '%';
+                box.style.top = (face.y * 100) + '%';
+                box.style.width = (face.w * 100) + '%';
+                box.style.height = (face.h * 100) + '%';
+                box.innerHTML = `<span>${escape(face.name)}</span>`;
+                box.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    selectedFace = index;
+                    frame.querySelectorAll('.lb-face').forEach(el => el.classList.remove('active'));
+                    box.classList.add('active');
+                    panel.innerHTML = panelFor(face);
+                });
+                frame.appendChild(box);
+            });
+
+            if (selectedFace !== null && photo.faces[selectedFace]) {
+                frame.querySelectorAll('.lb-face')[selectedFace].classList.add('active');
+                panel.innerHTML = panelFor(photo.faces[selectedFace]);
+            } else {
+                panel.innerHTML = emptyPanel(photo);
+            }
+        };
+
+        const open = (index) => {
+            current = index;
+            selectedFace = null;
+            lb.classList.add('open');
+            lb.setAttribute('aria-hidden', 'false');
+            document.body.style.overflow = 'hidden';
+            render();
+        };
+
+        const close = () => {
+            lb.classList.remove('open');
+            lb.setAttribute('aria-hidden', 'true');
+            document.body.style.overflow = '';
+        };
+
+        const step = (delta) => {
+            current = (current + delta + data.photos.length) % data.photos.length;
+            selectedFace = null;
+            render();
+        };
+
+        document.querySelectorAll('.tile').forEach(tile => {
+            tile.addEventListener('click', () => open(Number(tile.dataset.index)));
+        });
+
+        document.getElementById('lbClose').addEventListener('click', close);
+        document.getElementById('lbPrev').addEventListener('click', () => step(-1));
+        document.getElementById('lbNext').addEventListener('click', () => step(1));
+        lb.addEventListener('click', (e) => { if (e.target === lb || e.target.classList.contains('lb-stage')) close(); });
+
+        document.addEventListener('keydown', (e) => {
+            if (!lb.classList.contains('open')) return;
+            if (e.key === 'Escape') close();
+            if (e.key === 'ArrowLeft') step(-1);
+            if (e.key === 'ArrowRight') step(1);
+        });
+    })();
+</script>
 }

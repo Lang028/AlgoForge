@@ -19,6 +19,6 @@ namespace AlgoForge.Models
 
         public PhotoFaceProcessingStatus FaceProcessingStatus { get; set; } = PhotoFaceProcessingStatus.Pending;
 
-        public ICollection<FaceDetection> FaceDetections { get; set; } = new List<FaceDetection>();
+        public ICollection<PersonDetection> PersonDetections { get; set; } = new List<PersonDetection>();
     }
 }

@@ -11,44 +11,78 @@ namespace AlgoForge.Data
     {
         public static async Task SeedAsync(AlgoForgeDbContext db, UserManager<ApplicationUser> userManager)
         {
-            if (await db.Events.AnyAsync())
+            var demoEvent = await db.Events.FirstOrDefaultAsync(e => e.Name == "Demo Event");
+
+            if (demoEvent is null)
             {
-                return;
+                var seedAdmin = await userManager.FindByEmailAsync("seed-admin@algoforge.local");
+                if (seedAdmin is null)
+                {
+                    seedAdmin = new ApplicationUser
+                    {
+                        UserName = "seed-admin@algoforge.local",
+                        Email = "seed-admin@algoforge.local",
+                        DisplayName = "Seed Admin",
+                        EmailConfirmed = true
+                    };
+                    await userManager.CreateAsync(seedAdmin, "SeedAdmin123!");
+                }
+
+                var organisation = new Organisation
+                {
+                    Id = Guid.NewGuid(),
+                    Name = "Demo Org",
+                    ContactEmail = "seed-admin@algoforge.local",
+                    AdminUserId = seedAdmin.Id
+                };
+                db.Organisations.Add(organisation);
+
+                demoEvent = new Event
+                {
+                    Id = Guid.NewGuid(),
+                    Name = "Demo Event",
+                    EventDate = DateTime.UtcNow,
+                    OrganisationId = organisation.Id,
+                    Status = EventStatus.Live
+                };
+                db.Events.Add(demoEvent);
+
+                await db.SaveChangesAsync();
             }
 
-            var seedAdmin = await userManager.FindByEmailAsync("seed-admin@algoforge.local");
-            if (seedAdmin is null)
+            // Pre-claimed so the demo can show the attendee-side consent review (Tags/{eventId})
+            // without the email/claim flow, which isn't built yet (OPEN-6). Kept as its own
+            // gate (not folded into the "any events exist" check above) so it still gets
+            // created on databases that were seeded before this attendee existed.
+            var demoAttendeeUser = await userManager.FindByEmailAsync("demo-attendee@algoforge.local");
+            if (demoAttendeeUser is null)
             {
-                seedAdmin = new ApplicationUser
+                demoAttendeeUser = new ApplicationUser
                 {
-                    UserName = "seed-admin@algoforge.local",
-                    Email = "seed-admin@algoforge.local",
-                    DisplayName = "Seed Admin",
+                    UserName = "demo-attendee@algoforge.local",
+                    Email = "demo-attendee@algoforge.local",
+                    DisplayName = "Demo Attendee",
                     EmailConfirmed = true
                 };
-                await userManager.CreateAsync(seedAdmin, "SeedAdmin123!");
+                await userManager.CreateAsync(demoAttendeeUser, "DemoAttendee123!");
             }
 
-            var organisation = new Organisation
+            var demoAttendee = await db.Attendees
+                .FirstOrDefaultAsync(a => a.EventId == demoEvent.Id && a.Email == "demo-attendee@algoforge.local");
+            if (demoAttendee is null)
             {
-                Id = Guid.NewGuid(),
-                Name = "Demo Org",
-                ContactEmail = "seed-admin@algoforge.local",
-                AdminUserId = seedAdmin.Id
-            };
-            db.Organisations.Add(organisation);
-
-            var demoEvent = new Event
-            {
-                Id = Guid.NewGuid(),
-                Name = "Demo Event",
-                EventDate = DateTime.UtcNow,
-                OrganisationId = organisation.Id,
-                Status = EventStatus.Live
-            };
-            db.Events.Add(demoEvent);
-
-            await db.SaveChangesAsync();
+                db.Attendees.Add(new Attendee
+                {
+                    Id = Guid.NewGuid(),
+                    EventId = demoEvent.Id,
+                    Name = "Demo Attendee",
+                    Email = "demo-attendee@algoforge.local",
+                    ContactInfo = string.Empty,
+                    InviteToken = Guid.NewGuid().ToString("N"),
+                    ClaimedByUserId = demoAttendeeUser.Id
+                });
+                await db.SaveChangesAsync();
+            }
         }
     }
 }

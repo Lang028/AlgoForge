@@ -1,0 +1,52 @@
+@model AlgoForge.ViewModels.Events.CreateEventViewModel
+@{
+    ViewData["Title"] = "Create event";
+    var organisations = ViewData["Organisations"] as List<AlgoForge.Models.Organisation> ?? new List<AlgoForge.Models.Organisation>();
+}
+
+<h2>Create event</h2>
+
+<div class="row">
+    <div class="col-md-6">
+        <form method="post">
+            <div asp-validation-summary="All" class="text-danger"></div>
+
+            <div class="mb-3">
+                <label asp-for="OrganisationId" class="form-label"></label>
+                <select asp-for="OrganisationId" class="form-select">
+                    <option value="">Select an organisation</option>
+                    @foreach (var org in organisations)
+                    {
+                        <option value="@org.Id">@org.Name</option>
+                    }
+                </select>
+                <span asp-validation-for="OrganisationId" class="text-danger"></span>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="Name" class="form-label"></label>
+                <input asp-for="Name" class="form-control" />
+                <span asp-validation-for="Name" class="text-danger"></span>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="EventDate" class="form-label"></label>
+                <input asp-for="EventDate" class="form-control" />
+                <span asp-validation-for="EventDate" class="text-danger"></span>
+            </div>
+
+            <div class="mb-3 form-check">
+                <input asp-for="TagConfirmationRequired" class="form-check-input" />
+                <label asp-for="TagConfirmationRequired" class="form-check-label"></label>
+            </div>
+
+            <button type="submit" class="btn btn-primary">Create event</button>
+        </form>
+    </div>
+</div>
+
+<p class="mt-3"><a asp-action="Index">Back to events</a></p>
+
+@section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+}

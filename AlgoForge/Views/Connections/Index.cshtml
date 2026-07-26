@@ -1,0 +1,114 @@
+@model List<AlgoForge.Models.Connection>
+@{
+    ViewData["Title"] = "My connections";
+    var viewerId = (Guid)ViewData["ViewerId"]!;
+    var attendees = ViewData["Attendees"] as List<AlgoForge.Models.Attendee> ?? new List<AlgoForge.Models.Attendee>();
+
+    AlgoForge.Models.Attendee? ContactFor(Guid userId) =>
+        attendees.FirstOrDefault(a => a.ClaimedByUserId == userId);
+
+    string NameOf(AlgoForge.Models.Connection c)
+    {
+        var otherId = c.OtherUserId(viewerId);
+        return ContactFor(otherId)?.Name
+            ?? (otherId == c.RequesterId ? c.Requester?.DisplayName : c.Receiver?.DisplayName)
+            ?? "Someone";
+    }
+
+    var incoming = Model.Where(c => c.Status == AlgoForge.Models.ConnectionStatus.Pending && c.ReceiverId == viewerId).ToList();
+    var outgoing = Model.Where(c => c.Status == AlgoForge.Models.ConnectionStatus.Pending && c.RequesterId == viewerId).ToList();
+    var accepted = Model.Where(c => c.Status == AlgoForge.Models.ConnectionStatus.Accepted).ToList();
+}
+
+<h2>My connections</h2>
+<p class="text-muted">A connection shares contact details, nothing else. Event photos stay visible to every member either way.</p>
+
+@if (TempData["SuccessMessage"] is string success)
+{
+    <div class="alert alert-success">@success</div>
+}
+@if (TempData["ErrorMessage"] is string error)
+{
+    <div class="alert alert-warning">@error</div>
+}
+
+<h4 class="mt-4">Waiting on you (@incoming.Count)</h4>
+@if (!incoming.Any())
+{
+    <p class="text-muted">Nothing to respond to.</p>
+}
+else
+{
+    <ul class="list-group mb-3">
+        @foreach (var c in incoming)
+        {
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+                <span>
+                    <strong>@NameOf(c)</strong>
+                    @if (c.MetAtEvent is not null)
+                    {
+                        <span class="text-muted">&mdash; met at @c.MetAtEvent.Name</span>
+                    }
+                </span>
+                <span class="d-flex gap-2">
+                    <form method="post" asp-action="Accept" asp-route-connectionId="@c.Id">
+                        <button type="submit" class="btn btn-sm btn-primary">Accept</button>
+                    </form>
+                    <form method="post" asp-action="Decline" asp-route-connectionId="@c.Id">
+                        <button type="submit" class="btn btn-sm btn-outline-secondary">Decline</button>
+                    </form>
+                </span>
+            </li>
+        }
+    </ul>
+}
+
+<h4 class="mt-4">Sent (@outgoing.Count)</h4>
+@if (!outgoing.Any())
+{
+    <p class="text-muted">No pending requests.</p>
+}
+else
+{
+    <ul class="list-group mb-3">
+        @foreach (var c in outgoing)
+        {
+            <li class="list-group-item">
+                <strong>@NameOf(c)</strong>
+                <span class="badge bg-secondary">Awaiting response</span>
+            </li>
+        }
+    </ul>
+}
+
+<h4 class="mt-4">Connected (@accepted.Count)</h4>
+@if (!accepted.Any())
+{
+    <p class="text-muted">No connections yet. Open an event gallery and click a face to reach out.</p>
+}
+else
+{
+    <ul class="list-group">
+        @foreach (var c in accepted)
+        {
+            var contact = ContactFor(c.OtherUserId(viewerId));
+            <li class="list-group-item">
+                <strong>@NameOf(c)</strong>
+                @if (c.MetAtEvent is not null)
+                {
+                    <span class="text-muted">&mdash; met at @c.MetAtEvent.Name</span>
+                }
+                @if (contact is not null)
+                {
+                    <div class="small mt-1">
+                        <a href="mailto:@contact.Email">@contact.Email</a>
+                        @if (!string.IsNullOrWhiteSpace(contact.ContactInfo))
+                        {
+                            <span class="text-muted">&middot; @contact.ContactInfo</span>
+                        }
+                    </div>
+                }
+            </li>
+        }
+    </ul>
+}

@@ -17,7 +17,7 @@ namespace AlgoForge.Models
         public ICollection<EventMembership> Memberships { get; set; } = new List<EventMembership>();
         public ICollection<Attendee> Attendees { get; set; } = new List<Attendee>();
         public ICollection<Photo> Photos { get; set; } = new List<Photo>();
-        public ICollection<FaceCluster> FaceClusters { get; set; } = new List<FaceCluster>();
+        public ICollection<PersonCluster> PersonClusters { get; set; } = new List<PersonCluster>();
         public ICollection<Album> Albums { get; set; } = new List<Album>();
     }
 }

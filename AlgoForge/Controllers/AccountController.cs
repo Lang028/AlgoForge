@@ -1,7 +1,9 @@
+using AlgoForge.Data;
 using AlgoForge.Models;
 using AlgoForge.ViewModels.Account;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace AlgoForge.Controllers
 {
@@ -9,17 +11,20 @@ namespace AlgoForge.Controllers
     {
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly SignInManager<ApplicationUser> _signInManager;
+        private readonly AlgoForgeDbContext _db;
 
-        public AccountController(UserManager<ApplicationUser> userManager, SignInManager<ApplicationUser> signInManager)
+        public AccountController(UserManager<ApplicationUser> userManager, SignInManager<ApplicationUser> signInManager, AlgoForgeDbContext db)
         {
             _userManager = userManager;
             _signInManager = signInManager;
+            _db = db;
         }
 
         [HttpGet]
-        public IActionResult Register(string? returnUrl = null)
+        public async Task<IActionResult> Register(string? returnUrl = null)
         {
             ViewData["ReturnUrl"] = returnUrl;
+            ViewData["Events"] = await _db.Events.OrderBy(e => e.Name).ToListAsync();
             return View();
         }
 
@@ -30,6 +35,7 @@ namespace AlgoForge.Controllers
             ViewData["ReturnUrl"] = returnUrl;
             if (!ModelState.IsValid)
             {
+                ViewData["Events"] = await _db.Events.OrderBy(e => e.Name).ToListAsync();
                 return View(model);
             }
 
@@ -43,6 +49,15 @@ namespace AlgoForge.Controllers
             var result = await _userManager.CreateAsync(user, model.Password);
             if (result.Succeeded)
             {
+                _db.EventMemberships.Add(new EventMembership
+                {
+                    Id = Guid.NewGuid(),
+                    EventId = model.EventId,
+                    UserId = user.Id,
+                    Role = model.Role
+                });
+                await _db.SaveChangesAsync();
+
                 await _signInManager.SignInAsync(user, isPersistent: false);
                 return RedirectToLocal(returnUrl);
             }
@@ -51,6 +66,7 @@ namespace AlgoForge.Controllers
             {
                 ModelState.AddModelError(string.Empty, error.Description);
             }
+            ViewData["Events"] = await _db.Events.OrderBy(e => e.Name).ToListAsync();
             return View(model);
         }
 

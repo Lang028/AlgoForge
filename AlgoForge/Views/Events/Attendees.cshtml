@@ -1,0 +1,57 @@
+@model List<AlgoForge.Models.Attendee>
+@{
+    ViewData["Title"] = "Attendees";
+    var eventId = ViewData["EventId"];
+    var eventName = ViewData["EventName"];
+}
+
+<h2>@eventName &mdash; Attendees</h2>
+
+@if (TempData["SuccessMessage"] is string success)
+{
+    <div class="alert alert-success">@success</div>
+}
+
+@if (!Model.Any())
+{
+    <p>No attendees yet. <a asp-action="ImportAttendees" asp-route-eventId="@eventId">Import a CSV</a>.</p>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Claimed</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var attendee in Model)
+            {
+                <tr>
+                    <td>@attendee.Name</td>
+                    <td>@attendee.Email</td>
+                    <td>
+                        @if (attendee.ClaimedByUserId.HasValue)
+                        {
+                            <span class="badge bg-success">Claimed</span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-secondary">Not claimed</span>
+                        }
+                    </td>
+                    <td>
+                        <form method="post" asp-action="SendInvite" asp-route-eventId="@eventId" asp-route-attendeeId="@attendee.Id">
+                            <button type="submit" class="btn btn-sm btn-outline-primary">Send invite</button>
+                        </form>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+<p class="mt-3"><a asp-action="Index">Back to events</a></p>
