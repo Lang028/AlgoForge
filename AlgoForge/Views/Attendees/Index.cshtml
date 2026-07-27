@@ -1,0 +1,59 @@
+﻿@model AlgoForge.ViewModels.Attendees.AttendeeListViewModel
+@{
+    ViewData["Title"] = Model.EventName + " - Attendees";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0">@Model.EventName &mdash; Attendees</h2>
+    <a asp-action="Add" asp-route-eventId="@Model.EventId" class="btn btn-primary">+ Add attendee</a>
+</div>
+
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success">@TempData["Success"]</div>
+}
+
+@if (!Model.Attendees.Any())
+{
+    <div class="card text-center p-5">
+        <p class="text-muted mb-3">No attendees yet.</p>
+        <div>
+            <a asp-action="Add" asp-route-eventId="@Model.EventId" class="btn btn-primary">Add one manually</a>
+        </div>
+    </div>
+}
+else
+{
+    <table class="table table-bordered align-middle">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Status</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var a in Model.Attendees)
+            {
+                <tr>
+                    <td>@a.Name</td>
+                    <td>@a.Email</td>
+                    <td>
+                        @if (a.IsClaimed)
+                        {
+                            <span class="badge bg-success">Claimed</span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-secondary">Not claimed</span>
+                        }
+                    </td>
+                    <td>
+                        <a asp-action="Edit" asp-route-attendeeId="@a.Id" class="btn btn-sm btn-outline-secondary">Edit</a>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}

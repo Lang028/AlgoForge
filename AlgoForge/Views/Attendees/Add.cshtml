@@ -1,0 +1,34 @@
+﻿@model AlgoForge.ViewModels.Attendees.AttendeeFormViewModel
+@{
+    ViewData["Title"] = "Add Attendee";
+}
+
+<h2 class="mb-1">Add Attendee</h2>
+<p class="text-muted mb-4">Event: @Model.EventName</p>
+
+<form asp-action="Add" method="post" class="col-md-6">
+    <input type="hidden" asp-for="EventId" />
+    <div asp-validation-summary="All" class="text-danger"></div>
+
+    <div class="mb-3">
+        <label asp-for="Name" class="form-label"></label>
+        <input asp-for="Name" class="form-control" />
+        <span asp-validation-for="Name" class="text-danger"></span>
+    </div>
+
+    <div class="mb-3">
+        <label asp-for="Email" class="form-label"></label>
+        <input asp-for="Email" class="form-control" />
+        <span asp-validation-for="Email" class="text-danger"></span>
+    </div>
+
+    <div class="mb-3">
+        <label asp-for="ContactInfo" class="form-label"></label>
+        <input asp-for="ContactInfo" class="form-control" />
+        <span asp-validation-for="ContactInfo" class="text-danger"></span>
+    </div>
+
+    <button type="submit" class="btn btn-primary">Add attendee</button>
+    <a asp-action="Index" asp-route-eventId="@Model.EventId" class="btn btn-link">Cancel</a>
+</form>
+

@@ -55,8 +55,25 @@ else
                             }
                         </ul>
                         <div class="d-flex gap-2">
-                            <a asp-action="Albums" asp-route-eventId="@ev.EventId" class="btn btn-sm btn-outline-primary">Albums</a>
-                            <a asp-action="FaceClusters" asp-route-eventId="@ev.EventId" class="btn btn-sm btn-outline-secondary">Face Clusters</a>
+                        <a asp-action="Albums"
+       asp-route-eventId="@ev.EventId"
+       class="btn btn-sm btn-outline-primary">
+        Albums
+    </a>
+
+    <a asp-action="FaceClusters"
+       asp-route-eventId="@ev.EventId"
+       class="btn btn-sm btn-outline-secondary">
+        Face Clusters
+    </a>
+
+    <a asp-controller="Attendees"
+       asp-action="Index"
+       asp-route-eventId="@ev.EventId"
+       class="btn btn-sm btn-outline-success">
+        Attendees
+    </a>
+         
                         </div>
                     </div>
                 </div>

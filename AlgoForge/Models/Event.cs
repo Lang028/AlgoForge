@@ -27,6 +27,7 @@ namespace AlgoForge.Models
         public ICollection<Album> Albums { get; set; } = new List<Album>();
         public ICollection<Invitation> Invitations { get; set; } = new List<Invitation>();
         public ICollection<FaceCluster> FaceClusters { get; set; } = new List<FaceCluster>();
+        public ICollection<Attendee> Attendees { get; set; } = new List<Attendee>();
 
         public bool IsUploadWindowOpen => Status == EventStatus.Live;
         public bool AreConnectionsOpen => Status == EventStatus.PostEvent || Status == EventStatus.Archived;

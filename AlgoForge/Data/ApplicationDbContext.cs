@@ -20,6 +20,7 @@ namespace AlgoForge.Data
         public DbSet<Tag> Tags => Set<Tag>();
         public DbSet<Connection> Connections => Set<Connection>();
         public DbSet<Comment> Comments => Set<Comment>();
+        public DbSet<Attendee> Attendees => Set<Attendee>();
 
         protected override void OnModelCreating(ModelBuilder builder)
         {
@@ -47,18 +48,30 @@ namespace AlgoForge.Data
                 .WithMany()
                 .HasForeignKey(c => c.IdentifiedEventMembershipId)
                 .OnDelete(DeleteBehavior.SetNull);
-            builder.Entity<FaceCluster>()
-    .HasOne(c => c.Event)
-    .WithMany(e => e.FaceClusters)
-    .HasForeignKey(c => c.EventId)
-    .OnDelete(DeleteBehavior.Restrict);
-
 
             builder.Entity<Photo>()
                 .HasQueryFilter(p => !p.IsDeleted);
 
             builder.Entity<Invitation>()
                 .HasIndex(i => new { i.EventId, i.Email });
+
+            // Attendee -> Event: Restrict, to avoid a second cascade path into the
+            // same table alongside FaceCluster's own Event relationship.
+            builder.Entity<Attendee>()
+                .HasOne(a => a.Event)
+                .WithMany(e => e.Attendees)
+                .HasForeignKey(a => a.EventId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Attendee -> ClaimedByUser: Restrict, same reasoning as EventMembership.User.
+            builder.Entity<Attendee>()
+                .HasOne(a => a.ClaimedByUser)
+                .WithMany()
+                .HasForeignKey(a => a.ClaimedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            builder.Entity<Attendee>()
+                .HasIndex(a => new { a.EventId, a.Email });
         }
     }
 }
