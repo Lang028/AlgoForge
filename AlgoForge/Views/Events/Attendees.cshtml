@@ -5,7 +5,13 @@
     var eventName = ViewData["EventName"];
 }
 
-<h2>@eventName &mdash; Attendees</h2>
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2 class="mb-0">@eventName &mdash; Attendees</h2>
+    <div>
+        <a asp-action="AddAttendee" asp-route-eventId="@eventId" class="btn btn-primary">+ Add attendee</a>
+        <a asp-action="ImportAttendees" asp-route-eventId="@eventId" class="btn btn-outline-primary">Import CSV</a>
+    </div>
+</div>
 
 @if (TempData["SuccessMessage"] is string success)
 {
@@ -14,7 +20,11 @@
 
 @if (!Model.Any())
 {
-    <p>No attendees yet. <a asp-action="ImportAttendees" asp-route-eventId="@eventId">Import a CSV</a>.</p>
+    <p>
+        No attendees yet.
+        <a asp-action="ImportAttendees" asp-route-eventId="@eventId">Import a CSV</a>
+        or <a asp-action="AddAttendee" asp-route-eventId="@eventId">add one manually</a>.
+    </p>
 }
 else
 {
@@ -44,9 +54,13 @@ else
                         }
                     </td>
                     <td>
-                        <form method="post" asp-action="SendInvite" asp-route-eventId="@eventId" asp-route-attendeeId="@attendee.Id">
-                            <button type="submit" class="btn btn-sm btn-outline-primary">Send invite</button>
-                        </form>
+                        <div class="d-flex gap-2">
+                            <form method="post" asp-action="SendInvite" asp-route-eventId="@eventId" asp-route-attendeeId="@attendee.Id">
+                                <button type="submit" class="btn btn-sm btn-outline-primary">Send invite</button>
+                            </form>
+                            <a asp-action="EditAttendee" asp-route-eventId="@eventId" asp-route-attendeeId="@attendee.Id"
+                               class="btn btn-sm btn-outline-secondary">Edit</a>
+                        </div>
                     </td>
                 </tr>
             }
