@@ -1,5 +1,6 @@
 using AlgoForge.Data;
 using AlgoForge.Models;
+using AlgoForge.Services.Authorization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -24,6 +25,11 @@ namespace AlgoForge.Controllers
 
         [HttpGet]
         [Route("Tags/{eventId}")]
+        [NoEventRoleCheck(
+            "Scoped to the caller's own claimed Attendee record, which is a strictly " +
+            "stronger check than event membership: you see your tags and nobody else's, " +
+            "member or not. Adding a role gate on top would only change what a non-member " +
+            "sees from an empty page to a 403.")]
         public async Task<IActionResult> Index(Guid eventId)
         {
             var evt = await _db.Events.FindAsync(eventId);
@@ -61,14 +67,19 @@ namespace AlgoForge.Controllers
             return View(tags);
         }
 
+        // Both opt out for the same reason as Index: Resolve() already refuses unless the
+        // caller *is* the attendee the tag is about. That is the consent invariant itself
+        // (working rule 4) and it must not be softened into a membership check.
         [HttpPost]
         [Route("Tags/{eventId}/Confirm/{tagId}")]
         [ValidateAntiForgeryToken]
+        [NoEventRoleCheck("Ownership of the tag is checked in Resolve(); see Index.")]
         public Task<IActionResult> Confirm(Guid eventId, Guid tagId) => Resolve(eventId, tagId, TagStatus.Confirmed);
 
         [HttpPost]
         [Route("Tags/{eventId}/Reject/{tagId}")]
         [ValidateAntiForgeryToken]
+        [NoEventRoleCheck("Ownership of the tag is checked in Resolve(); see Index.")]
         public Task<IActionResult> Reject(Guid eventId, Guid tagId) => Resolve(eventId, tagId, TagStatus.Rejected);
 
         private async Task<IActionResult> Resolve(Guid eventId, Guid tagId, TagStatus newStatus)

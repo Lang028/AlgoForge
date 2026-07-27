@@ -1,5 +1,6 @@
 using AlgoForge.Data;
 using AlgoForge.Models;
+using AlgoForge.Services.Authorization;
 using AlgoForge.Services.PersonPipeline;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
@@ -14,7 +15,14 @@ namespace AlgoForge.Controllers
     //
     // This is also the only place in the app where unconfirmed identities are visible at
     // all -- the gallery stays consent-clean (D20), so identification work happens here.
+    //
+    // Every action is coordinator/photographer-only (D4: the coordinator is the primary
+    // identifier, the photographer keeps it as backup). The gate is on the controller
+    // because there is no action here an attendee should ever reach -- identifying a
+    // cluster mints Suggested tags against a real person, which is the one thing in the
+    // app that must never be reachable by someone with no standing in the event.
     [Authorize]
+    [RequireEventRole(EventRole.Coordinator, EventRole.Photographer)]
     public class ClustersController : Controller
     {
         private readonly AlgoForgeDbContext _db;

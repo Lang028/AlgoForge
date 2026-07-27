@@ -1,6 +1,7 @@
 ﻿using AlgoForge.Data;
 using AlgoForge.Models;
 using AlgoForge.Services;
+using AlgoForge.Services.Authorization;
 using AlgoForge.ViewModels.Events;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
@@ -29,12 +30,29 @@ namespace AlgoForge.Controllers
             _emailSender = emailSender;
         }
 
+        // Only the events this user actually has standing in. The previous version listed
+        // every event in the database to every signed-in user, which also handed out the
+        // event ids that the rest of the app keyed off.
         public async Task<IActionResult> Index()
         {
+            var userIdText = _userManager.GetUserId(User);
+            if (userIdText is null || !Guid.TryParse(userIdText, out var userId))
+            {
+                return Challenge();
+            }
+
+            var eventIds = await _db.EventMemberships
+                .Where(m => m.UserId == userId)
+                .Select(m => m.EventId)
+                .Distinct()
+                .ToListAsync();
+
             var events = await _db.Events
+                .Where(e => eventIds.Contains(e.Id))
                 .Include(e => e.Organisation)
                 .OrderByDescending(e => e.EventDate)
                 .ToListAsync();
+
             return View(events);
         }
 
@@ -45,9 +63,14 @@ namespace AlgoForge.Controllers
             return View(new CreateEventViewModel());
         }
 
-        // Creating an event also grants the creator a Coordinator membership -- for this
-        // build there's no separate "invite a coordinator" step, so whoever stands the
-        // event up owns it (matches D4: coordinator is the primary identifier).
+        // Creating an event grants the creator BOTH memberships, Coordinator and
+        // Photographer.
+        //
+        // D1 keeps those permissions disjoint -- a Coordinator cannot upload photos -- but a
+        // photographer running a small event alone has to do both jobs. The answer is not to
+        // weaken D1 or invent a fifth role: one person simply holds two membership rows, and
+        // the access resolver returns a set. Without this the creator of an event could not
+        // upload a single photo to it.
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Create(CreateEventViewModel model)
@@ -75,13 +98,16 @@ namespace AlgoForge.Controllers
             };
             _db.Events.Add(evt);
 
-            _db.EventMemberships.Add(new EventMembership
+            foreach (var role in new[] { EventRole.Coordinator, EventRole.Photographer })
             {
-                Id = Guid.NewGuid(),
-                EventId = evt.Id,
-                UserId = userId,
-                Role = EventRole.Coordinator
-            });
+                _db.EventMemberships.Add(new EventMembership
+                {
+                    Id = Guid.NewGuid(),
+                    EventId = evt.Id,
+                    UserId = userId,
+                    Role = role
+                });
+            }
 
             await _db.SaveChangesAsync();
 
@@ -90,8 +116,14 @@ namespace AlgoForge.Controllers
         }
 
         // GET /Events/{eventId}/Attendees
+        //
+        // Coordinator-only, here and on every action below it: D3/D4 make the invitee list
+        // the coordinator's to own, and it is the densest concentration of personal data in
+        // the app -- names, emails and contact details for people who mostly do not have
+        // accounts yet and have consented to nothing.
         [HttpGet]
         [Route("Events/{eventId}/Attendees")]
+        [RequireEventRole(EventRole.Coordinator)]
         public async Task<IActionResult> Attendees(Guid eventId)
         {
             var evt = await _db.Events.FindAsync(eventId);
@@ -115,6 +147,7 @@ namespace AlgoForge.Controllers
         [HttpPost]
         [Route("Events/{eventId}/Attendees/{attendeeId}/SendInvite")]
         [ValidateAntiForgeryToken]
+        [RequireEventRole(EventRole.Coordinator)]
         public async Task<IActionResult> SendInvite(Guid eventId, Guid attendeeId)
         {
             var attendee = await _db.Attendees.FirstOrDefaultAsync(a => a.Id == attendeeId && a.EventId == eventId);
@@ -134,6 +167,7 @@ namespace AlgoForge.Controllers
         // GET /Events/{eventId}/ImportAttendees
         [HttpGet]
         [Route("Events/{eventId}/ImportAttendees")]
+        [RequireEventRole(EventRole.Coordinator)]
         public async Task<IActionResult> ImportAttendees(Guid eventId)
         {
             var evt = await _db.Events.FindAsync(eventId);
@@ -148,6 +182,7 @@ namespace AlgoForge.Controllers
         [HttpPost]
         [Route("Events/{eventId}/ImportAttendees")]
         [ValidateAntiForgeryToken]
+        [RequireEventRole(EventRole.Coordinator)]
         public async Task<IActionResult> ImportAttendees(Guid eventId, IFormFile? file)
         {
             var evt = await _db.Events.FindAsync(eventId);
@@ -192,6 +227,7 @@ namespace AlgoForge.Controllers
         [HttpPost]
         [Route("Events/{eventId}/ImportAttendeesConfirm")]
         [ValidateAntiForgeryToken]
+        [RequireEventRole(EventRole.Coordinator)]
         public async Task<IActionResult> ImportAttendeesConfirm(Guid eventId,
             [FromForm] List<AttendeeInputModel> attendees)
         {

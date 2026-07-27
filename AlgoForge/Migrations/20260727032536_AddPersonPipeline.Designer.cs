@@ -12,7 +12,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace AlgoForge.Migrations
 {
     [DbContext(typeof(AlgoForgeDbContext))]
-    [Migration("20260725025227_AddPersonPipeline")]
+    [Migration("20260727032536_AddPersonPipeline")]
     partial class AddPersonPipeline
     {
         /// <inheritdoc />
@@ -767,7 +767,7 @@ namespace AlgoForge.Migrations
                     b.HasOne("AlgoForge.Models.Event", "Event")
                         .WithMany("Photos")
                         .HasForeignKey("EventId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.HasOne("AlgoForge.Models.ApplicationUser", "UploadedByUser")

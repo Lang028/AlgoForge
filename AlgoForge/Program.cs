@@ -10,8 +10,12 @@ var builder = WebApplication.CreateBuilder(args);
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
     ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
 
+// LocalDB shuts itself down after a few minutes idle and is slow to wake, so the first
+// query after a quiet spell can fail outright. Retrying transient faults keeps that from
+// taking the whole app down -- it bites hardest around uploads, where the pipeline call
+// leaves a long gap between database calls.
 builder.Services.AddDbContext<AlgoForgeDbContext>(options =>
-    options.UseSqlServer(connectionString));
+    options.UseSqlServer(connectionString, sql => sql.EnableRetryOnFailure()));
 
 builder.Services.AddIdentity<ApplicationUser, IdentityRole<Guid>>()
     .AddEntityFrameworkStores<AlgoForgeDbContext>()
@@ -20,6 +24,8 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole<Guid>>()
 builder.Services.AddAuthorization();
 builder.Services.AddControllersWithViews();
 builder.Services.AddScoped<AttendeeImportService>();
+builder.Services.AddScoped<AlgoForge.Services.Authorization.IEventAccessService,
+                           AlgoForge.Services.Authorization.EventAccessService>();
 builder.Services.AddScoped<AlgoForge.Services.IEmailSender, AlgoForge.Services.NoOpEmailSender>();
 
 builder.Services.AddHttpClient<PersonPipelineService>(client =>
@@ -40,7 +46,35 @@ if (app.Environment.IsDevelopment())
     var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
     // Create/upgrade the local dev database before seeding, so a fresh clone works
     // without needing the dotnet-ef tool installed.
-    await db.Database.MigrateAsync();
+    //
+    // Guarded because the integration tests boot this same Program against an in-memory
+    // provider, which has no notion of migrations -- unguarded, MigrateAsync throws before
+    // any test gets to run, and the failure looks like a broken test rather than a
+    // provider mismatch. EnsureCreated covers the in-memory case.
+    if (db.Database.IsRelational())
+    {
+        // LocalDB stops itself when idle, and occasionally leaves an orphaned process behind
+        // that no longer answers. Both land here as an unhandled SqlException before the app
+        // has started, which reads as an application bug rather than a stopped database, so
+        // the instance is woken (and un-wedged) first. Development-only, LocalDB-only.
+        var startupLogger = app.Services.GetRequiredService<ILoggerFactory>()
+            .CreateLogger("AlgoForge.Startup");
+        DevDatabaseStartup.UseConnectionString(connectionString);
+
+        if (!await DevDatabaseStartup.EnsureAvailableAsync(db, startupLogger))
+        {
+            // The logger has already explained what to do. Stopping here beats starting an
+            // app whose every page would fail on its first query.
+            startupLogger.LogError("Startup aborted: the database is unreachable.");
+            return;
+        }
+
+        await db.Database.MigrateAsync();
+    }
+    else
+    {
+        await db.Database.EnsureCreatedAsync();
+    }
     await DbInitializer.SeedAsync(db, userManager);
 }
 
@@ -52,6 +86,18 @@ if (!app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 app.UseStaticFiles();
+
+// Uploaded photos live in App_Data/uploads, outside wwwroot, so that dev-time file
+// watchers (dotnet watch, Visual Studio hot reload) don't treat every upload as a source
+// change and restart or refresh the app mid-upload. This provider serves them at the
+// same /uploads URLs the Photo.BlobUrl column has always used.
+var uploadsRoot = Path.Combine(app.Environment.ContentRootPath, "App_Data", "uploads");
+Directory.CreateDirectory(uploadsRoot);
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(uploadsRoot),
+    RequestPath = "/uploads"
+});
 
 app.UseRouting();
 

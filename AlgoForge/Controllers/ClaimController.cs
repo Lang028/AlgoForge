@@ -41,13 +41,35 @@ namespace AlgoForge.Controllers
             if (attendee.ClaimedByUserId is null)
             {
                 attendee.ClaimedByUserId = userId;
-                await _db.SaveChangesAsync();
                 TempData["SuccessMessage"] = "You've claimed your invite. Here are your tags.";
             }
             else if (attendee.ClaimedByUserId != userId)
             {
                 return Forbid();
             }
+
+            // Claiming is what turns a person record into a member of the event (BUILD_GUIDE
+            // §3). Until the access rules went in nothing read EventMembership, so this step
+            // was never written and no attendee ever got a membership row -- which now means
+            // no gallery. Granted here, and granted on a repeat visit too, so the attendees
+            // who claimed before this existed are repaired by following their link again.
+            var alreadyMember = await _db.EventMemberships.AnyAsync(
+                m => m.EventId == attendee.EventId
+                     && m.UserId == userId
+                     && m.Role == EventRole.Attendee);
+
+            if (!alreadyMember)
+            {
+                _db.EventMemberships.Add(new EventMembership
+                {
+                    Id = Guid.NewGuid(),
+                    EventId = attendee.EventId,
+                    UserId = userId,
+                    Role = EventRole.Attendee
+                });
+            }
+
+            await _db.SaveChangesAsync();
 
             return RedirectToAction("Index", "Tags", new { eventId = attendee.EventId });
         }

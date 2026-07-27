@@ -79,6 +79,19 @@ namespace AlgoForge.Data
                 .HasForeignKey(t => t.PersonDetectionId)
                 .OnDelete(DeleteBehavior.Cascade);
 
+            // Event -> Photo cascades by convention (Photo.EventId is required and was
+            // never configured otherwise). Left alone, that collides with PersonCluster's
+            // SetNull below: SQL Server refuses a table reachable from Event by two
+            // different delete actions (Photo's Cascade and PersonCluster's SetNull, both
+            // arriving at PersonDetections). Restrict, same pattern as every other
+            // multi-path relationship in this file -- there is no Delete Event action in
+            // the app today, so this costs nothing.
+            builder.Entity<Photo>()
+                .HasOne(p => p.Event)
+                .WithMany(e => e.Photos)
+                .HasForeignKey(p => p.EventId)
+                .OnDelete(DeleteBehavior.Restrict);
+
             // Reclustering deletes and rebuilds unidentified clusters on every run, so
             // detections must survive their cluster being dropped -- SetNull, never
             // Cascade. Cascade here would delete the detections and, through the Tag

@@ -12,20 +12,12 @@ namespace AlgoForge.Migrations
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropForeignKey(
+                name: "FK_Photos_Events_EventId",
+                table: "Photos");
+
+            migrationBuilder.DropForeignKey(
                 name: "FK_Tags_FaceDetections_FaceDetectionId",
                 table: "Tags");
-
-            // Detections from the old face-only pipeline cannot be mapped onto the new
-            // person detections: different algorithm, different rows, different ids. Any
-            // existing tag therefore points at a row that is about to disappear, and the
-            // foreign key added at the end of this migration would fail on it.
-            //
-            // This is a hard delete of consent records, which working rule 4 otherwise
-            // forbids. It is defensible only because these are pre-pipeline development
-            // tags whose referent no longer exists -- re-running detection and
-            // identification regenerates them. Do not apply this migration to a database
-            // holding real attendee decisions.
-            migrationBuilder.Sql("DELETE FROM Tags;");
 
             migrationBuilder.DropTable(
                 name: "FaceDetections");
@@ -145,6 +137,14 @@ namespace AlgoForge.Migrations
                 columns: new[] { "PhotoId", "IsTaggable" });
 
             migrationBuilder.AddForeignKey(
+                name: "FK_Photos_Events_EventId",
+                table: "Photos",
+                column: "EventId",
+                principalTable: "Events",
+                principalColumn: "Id",
+                onDelete: ReferentialAction.Restrict);
+
+            migrationBuilder.AddForeignKey(
                 name: "FK_Tags_PersonDetections_PersonDetectionId",
                 table: "Tags",
                 column: "PersonDetectionId",
@@ -156,6 +156,10 @@ namespace AlgoForge.Migrations
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.DropForeignKey(
+                name: "FK_Photos_Events_EventId",
+                table: "Photos");
+
             migrationBuilder.DropForeignKey(
                 name: "FK_Tags_PersonDetections_PersonDetectionId",
                 table: "Tags");
@@ -262,6 +266,14 @@ namespace AlgoForge.Migrations
                 name: "IX_FaceDetections_PhotoId",
                 table: "FaceDetections",
                 column: "PhotoId");
+
+            migrationBuilder.AddForeignKey(
+                name: "FK_Photos_Events_EventId",
+                table: "Photos",
+                column: "EventId",
+                principalTable: "Events",
+                principalColumn: "Id",
+                onDelete: ReferentialAction.Cascade);
 
             migrationBuilder.AddForeignKey(
                 name: "FK_Tags_FaceDetections_FaceDetectionId",

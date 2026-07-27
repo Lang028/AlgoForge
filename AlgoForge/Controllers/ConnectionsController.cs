@@ -1,6 +1,7 @@
 using AlgoForge.Data;
 using AlgoForge.Models;
 using AlgoForge.Services;
+using AlgoForge.Services.Authorization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -62,9 +63,15 @@ namespace AlgoForge.Controllers
 
         // POST /Connections/Request -- sent from a face in the gallery. Named Send() because
         // a Request() action would hide ControllerBase.Request, which this method needs.
+        //
+        // Delegates are excluded on purpose: D5 gives them view and download and no write
+        // actions at all, and reaching out to someone is very much a write. The confirmed-tag
+        // check below guards who you may reach; this guards whether you had any business in
+        // the event to begin with, which it previously did not check.
         [HttpPost]
         [ActionName("Request")]
         [ValidateAntiForgeryToken]
+        [RequireEventRole(EventRole.Coordinator, EventRole.Photographer, EventRole.Attendee)]
         public async Task<IActionResult> Send(Guid eventId, Guid attendeeId)
         {
             var viewerId = CurrentUserId();

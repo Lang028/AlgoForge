@@ -764,7 +764,7 @@ namespace AlgoForge.Migrations
                     b.HasOne("AlgoForge.Models.Event", "Event")
                         .WithMany("Photos")
                         .HasForeignKey("EventId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.HasOne("AlgoForge.Models.ApplicationUser", "UploadedByUser")

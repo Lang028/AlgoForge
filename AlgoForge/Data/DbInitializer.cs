@@ -83,6 +83,38 @@ namespace AlgoForge.Data
                 });
                 await db.SaveChangesAsync();
             }
+
+            // Memberships are what grant access now that the app actually reads them, so the
+            // seeded personas need them or the demo event is unreachable to everyone --
+            // including the admin who owns it. The seed admin gets both staff roles because
+            // D1 keeps them disjoint and a one-person demo has to do both jobs.
+            var seedAdminUser = await userManager.FindByEmailAsync("seed-admin@algoforge.local");
+            if (seedAdminUser is not null)
+            {
+                await GrantAsync(db, demoEvent.Id, seedAdminUser.Id, EventRole.Coordinator);
+                await GrantAsync(db, demoEvent.Id, seedAdminUser.Id, EventRole.Photographer);
+            }
+
+            await GrantAsync(db, demoEvent.Id, demoAttendeeUser.Id, EventRole.Attendee);
+            await db.SaveChangesAsync();
+        }
+
+        private static async Task GrantAsync(
+            AlgoForgeDbContext db, Guid eventId, Guid userId, EventRole role)
+        {
+            var exists = await db.EventMemberships.AnyAsync(
+                m => m.EventId == eventId && m.UserId == userId && m.Role == role);
+
+            if (!exists)
+            {
+                db.EventMemberships.Add(new EventMembership
+                {
+                    Id = Guid.NewGuid(),
+                    EventId = eventId,
+                    UserId = userId,
+                    Role = role
+                });
+            }
         }
     }
 }
