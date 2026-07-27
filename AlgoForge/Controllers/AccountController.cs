@@ -21,10 +21,9 @@ namespace AlgoForge.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> Register(string? returnUrl = null)
+        public IActionResult Register(string? returnUrl = null)
         {
             ViewData["ReturnUrl"] = returnUrl;
-            ViewData["Events"] = await _db.Events.OrderBy(e => e.Name).ToListAsync();
             return View();
         }
 
@@ -35,7 +34,6 @@ namespace AlgoForge.Controllers
             ViewData["ReturnUrl"] = returnUrl;
             if (!ModelState.IsValid)
             {
-                ViewData["Events"] = await _db.Events.OrderBy(e => e.Name).ToListAsync();
                 return View(model);
             }
 
@@ -49,15 +47,8 @@ namespace AlgoForge.Controllers
             var result = await _userManager.CreateAsync(user, model.Password);
             if (result.Succeeded)
             {
-                _db.EventMemberships.Add(new EventMembership
-                {
-                    Id = Guid.NewGuid(),
-                    EventId = model.EventId,
-                    UserId = user.Id,
-                    Role = model.Role
-                });
-                await _db.SaveChangesAsync();
-
+                // No membership is granted here. A new account has standing in no event
+                // until it creates one, accepts an invitation, or claims an attendee record.
                 await _signInManager.SignInAsync(user, isPersistent: false);
                 return RedirectToLocal(returnUrl);
             }
@@ -66,7 +57,7 @@ namespace AlgoForge.Controllers
             {
                 ModelState.AddModelError(string.Empty, error.Description);
             }
-            ViewData["Events"] = await _db.Events.OrderBy(e => e.Name).ToListAsync();
+
             return View(model);
         }
 

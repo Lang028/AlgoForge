@@ -1,12 +1,7 @@
 @model AlgoForge.ViewModels.Account.RegisterViewModel
-@using Microsoft.AspNetCore.Mvc.Rendering
 
 @{
     ViewData["Title"] = "Register";
-    var events = ViewData["Events"] as List<AlgoForge.Models.Event> ?? new List<AlgoForge.Models.Event>();
-    var eventItems = events.Select(e => new SelectListItem(e.Name, e.Id.ToString()));
-    var roleItems = new[] { AlgoForge.Models.EventRole.Coordinator, AlgoForge.Models.EventRole.Photographer }
-        .Select(r => new SelectListItem(r.ToString(), r.ToString()));
 }
 
 <div class="row justify-content-center">
@@ -40,26 +35,10 @@
                 <span asp-validation-for="ConfirmPassword" class="text-danger"></span>
             </div>
 
-            <hr />
             <p class="text-muted small">
-                Demo-only: pick the event and role this account will act as. There's no
-                permission enforcement behind this yet -- it just gives the login a real
-                persona to demo with.
+                Once you have an account you can create an event of your own, or open an
+                invitation link someone has emailed you.
             </p>
-
-            <div class="mb-3">
-                <label asp-for="EventId" class="form-label"></label>
-                <select asp-for="EventId" asp-items="eventItems" class="form-select">
-                    <option value="">Select an event</option>
-                </select>
-                <span asp-validation-for="EventId" class="text-danger"></span>
-            </div>
-
-            <div class="mb-3">
-                <label asp-for="Role" class="form-label"></label>
-                <select asp-for="Role" asp-items="roleItems" class="form-select"></select>
-                <span asp-validation-for="Role" class="text-danger"></span>
-            </div>
 
             <button type="submit" class="btn btn-primary">Register</button>
         </form>

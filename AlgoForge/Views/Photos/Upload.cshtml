@@ -1,3 +1,4 @@
+@using AlgoForge.Services
 @{
     ViewData["Title"] = "Upload photos";
     var eventId = ViewData["EventId"];
@@ -6,12 +7,216 @@
 
 <h2>Upload photos to @eventName</h2>
 
-<form method="post" enctype="multipart/form-data" asp-action="Upload" asp-route-eventId="@eventId">
+@if (TempData["ErrorMessage"] is string error)
+{
+    <div class="alert alert-danger">@error</div>
+}
+
+@* Posts as one request with no JavaScript, which is the fallback path. With JavaScript
+   the same inputs are intercepted and uploaded in batches -- see the script below. *@
+<form method="post" enctype="multipart/form-data" asp-action="Upload" asp-route-eventId="@eventId" id="upload-form">
     <div class="mb-3">
-        <input type="file" name="files" multiple accept="image/*" class="form-control" required />
-        <div class="form-text">You can select multiple photos at once. Face detection runs immediately after upload -- this may take a few seconds per photo.</div>
+        <label class="form-label" for="file-input">Photos</label>
+        <input type="file" name="files" id="file-input" multiple accept="image/*" class="form-control" />
+        <div class="form-text">Pick individual photos.</div>
     </div>
-    <button type="submit" class="btn btn-primary">Upload</button>
+
+    <div class="mb-3">
+        <label class="form-label" for="folder-input">Or a whole folder</label>
+        @* webkitdirectory is the only way to pick a directory from a browser. It is
+           non-standard but implemented by every current browser; where it is missing the
+           input simply behaves as a normal multi-file picker, which is a safe degradation. *@
+        <input type="file" name="files" id="folder-input" multiple webkitdirectory directory class="form-control" />
+        <div class="form-text">
+            Selects every image in the folder and its subfolders. Non-image files
+            (Thumbs.db, sidecar files, and the like) are ignored automatically.
+        </div>
+    </div>
+
+    <div class="alert alert-warning d-none" id="size-warning"></div>
+    <div class="form-text mb-3 d-none" id="selection-summary"></div>
+
+    <div class="d-none mb-3" id="progress-area">
+        <div class="progress" role="progressbar" aria-label="Upload progress">
+            <div class="progress-bar" id="progress-bar" style="width: 0%"></div>
+        </div>
+        <div class="form-text" id="progress-text"></div>
+    </div>
+
+    <button type="submit" class="btn btn-primary" id="submit-button">Upload</button>
 </form>
 
 <p class="mt-3"><a asp-action="Index" asp-route-eventId="@eventId">Back to gallery</a></p>
+
+@section Scripts {
+<script>
+    (function () {
+        const eventId = '@eventId';
+        const maxRequestBytes = @PhotoUploadPolicy.MaxRequestBytes;
+        const maxFileBytes = @PhotoUploadPolicy.MaxFileBytes;
+
+        // A batch is bounded by both count and bytes: detection runs inline at ~1-3s per
+        // photo, so the count is what keeps a single request short, while the byte cap stops
+        // a handful of very large frames from making one batch enormous anyway.
+        const batchFileLimit = 8;
+        const batchByteLimit = 32 * 1024 * 1024;
+
+        const form = document.getElementById('upload-form');
+        const fileInput = document.getElementById('file-input');
+        const folderInput = document.getElementById('folder-input');
+        const warning = document.getElementById('size-warning');
+        const summary = document.getElementById('selection-summary');
+        const submit = document.getElementById('submit-button');
+        const progressArea = document.getElementById('progress-area');
+        const progressBar = document.getElementById('progress-bar');
+        const progressText = document.getElementById('progress-text');
+
+        const mb = bytes => (bytes / (1024 * 1024)).toFixed(1) + 'MB';
+
+        // Mirrors PhotoUploadPolicy server-side. Filtering here is about not spending
+        // minutes uploading a folder's worth of sidecar files only to have them rejected on
+        // arrival -- the server still re-decides on the actual bytes regardless.
+        const imagePattern = /\.(jpe?g|png|webp|bmp)$/i;
+
+        function selectedFiles() {
+            return [...Array.from(fileInput.files || []), ...Array.from(folderInput.files || [])];
+        }
+
+        function partition(files) {
+            const accepted = [];
+            let ignored = 0;
+            for (const file of files) {
+                // Directory entries surface as zero-byte files in some browsers.
+                if (file.size === 0 || !imagePattern.test(file.name)) { ignored++; continue; }
+                accepted.push(file);
+            }
+            return { accepted, ignored };
+        }
+
+        function review() {
+            const { accepted, ignored } = partition(selectedFiles());
+            const total = accepted.reduce((sum, f) => sum + f.size, 0);
+            const oversized = accepted.filter(f => f.size > maxFileBytes).length;
+
+            warning.classList.add('d-none');
+            summary.classList.add('d-none');
+            submit.disabled = false;
+
+            if (accepted.length === 0 && ignored === 0) return;
+
+            let text = accepted.length + ' image(s) selected, ' + mb(total) + ' total.';
+            if (ignored > 0) text += ' ' + ignored + ' non-image file(s) will be ignored.';
+            summary.textContent = text;
+            summary.classList.remove('d-none');
+
+            if (accepted.length === 0) {
+                warning.textContent = 'No images found in that selection.';
+                warning.classList.remove('d-none');
+                submit.disabled = true;
+                return;
+            }
+
+            if (oversized > 0) {
+                warning.textContent = oversized + ' file(s) are larger than ' + mb(maxFileBytes) +
+                    ' and will be skipped. The rest will upload normally.';
+                warning.classList.remove('d-none');
+            }
+        }
+
+        fileInput.addEventListener('change', review);
+        folderInput.addEventListener('change', review);
+
+        function batches(files) {
+            const out = [];
+            let current = [];
+            let bytes = 0;
+            for (const file of files) {
+                if (current.length > 0 && (current.length >= batchFileLimit || bytes + file.size > batchByteLimit)) {
+                    out.push(current);
+                    current = [];
+                    bytes = 0;
+                }
+                current.push(file);
+                bytes += file.size;
+            }
+            if (current.length > 0) out.push(current);
+            return out;
+        }
+
+        function token() {
+            const input = form.querySelector('input[name="__RequestVerificationToken"]');
+            return input ? input.value : '';
+        }
+
+        async function postBatch(url, files, fields) {
+            const body = new FormData();
+            body.append('__RequestVerificationToken', token());
+            for (const file of files) body.append('files', file, file.name);
+            for (const [key, value] of Object.entries(fields || {})) {
+                if (Array.isArray(value)) value.forEach(v => body.append(key, v));
+                else body.append(key, value);
+            }
+            const res = await fetch(url, { method: 'POST', body, credentials: 'same-origin' });
+            if (!res.ok) throw new Error('Upload failed with status ' + res.status);
+            return res.json();
+        }
+
+        form.addEventListener('submit', async function (e) {
+            const { accepted } = partition(selectedFiles());
+            if (accepted.length === 0) return; // let the plain form post handle the empty case
+
+            e.preventDefault();
+            submit.disabled = true;
+            warning.classList.add('d-none');
+            progressArea.classList.remove('d-none');
+
+            const groups = batches(accepted);
+            let done = 0;
+            let uploaded = 0;
+            const skipped = [];
+
+            for (let i = 0; i < groups.length; i++) {
+                progressText.textContent =
+                    'Uploading and detecting faces -- ' + done + ' of ' + accepted.length + ' photos...';
+                try {
+                    const result = await postBatch(
+                        '@Url.Action("UploadBatch", "Photos")?eventId=' + eventId, groups[i]);
+                    uploaded += result.uploaded;
+                    if (result.skipped) skipped.push(...result.skipped);
+                } catch (err) {
+                    // One failed batch must not discard the batches that already landed:
+                    // those photos are saved, so report and stop rather than starting over.
+                    warning.textContent =
+                        'Stopped after ' + uploaded + ' photo(s): ' + err.message +
+                        ' Already-uploaded photos were kept -- you can retry the rest.';
+                    warning.classList.remove('d-none');
+                    break;
+                }
+                done += groups[i].length;
+                const pct = Math.round((done / accepted.length) * 100);
+                progressBar.style.width = pct + '%';
+                progressBar.textContent = pct + '%';
+            }
+
+            // Always called, even when everything was skipped: this is also what hands the
+            // run's totals to the gallery, since no single batch request knew them.
+            progressText.textContent = uploaded > 0
+                ? 'Grouping people across the event...'
+                : 'Finishing...';
+            try {
+                await postBatch('@Url.Action("FinishUpload", "Photos")?eventId=' + eventId, [], {
+                    uploaded: uploaded,
+                    // Capped: a folder can skip hundreds of files and the message only ever
+                    // names the first few anyway.
+                    skipped: skipped.slice(0, 20)
+                });
+            } catch {
+                // Clustering is retryable from the identify page, so a failure here is not
+                // worth losing the upload over.
+            }
+
+            window.location = '@Url.Action("Index", "Photos")?eventId=' + eventId;
+        });
+    })();
+</script>
+}

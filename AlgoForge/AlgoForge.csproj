@@ -6,7 +6,16 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>AlgoForge</RootNamespace>
     <UserSecretsId>algoforge-geekedon-web</UserSecretsId>
+    <!-- App_Data holds runtime data written while the app runs (uploaded photos,
+         embedding sidecars). It must never be a project item: dotnet watch / Visual
+         Studio hot reload treat item changes as source changes, so without this every
+         photo upload re-evaluated the project and disrupted the running app. -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);App_Data/**</DefaultItemExcludes>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Watch Remove="App_Data\**" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="8.0.10" />

@@ -1,5 +1,7 @@
 using AlgoForge.Data;
 using AlgoForge.Models;
+using AlgoForge.Services;
+using AlgoForge.Services.Authorization;
 using AlgoForge.Services.PersonPipeline;
 using AlgoForge.ViewModels.Photos;
 using Microsoft.AspNetCore.Authorization;
@@ -33,6 +35,7 @@ namespace AlgoForge.Controllers
         }
 
         [HttpGet]
+        [RequireEventRole(EventRole.Photographer)]
         public async Task<IActionResult> Upload(Guid eventId)
         {
             var evt = await _db.Events.FindAsync(eventId);
@@ -48,8 +51,10 @@ namespace AlgoForge.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        [RequestSizeLimit(50_000_000)]
-        public async Task<IActionResult> Upload(Guid eventId, List<IFormFile> files)
+        [RequireEventRole(EventRole.Photographer)]
+        [RequestSizeLimit(PhotoUploadPolicy.MaxRequestBytes)]
+        [RequestFormLimits(MultipartBodyLengthLimit = PhotoUploadPolicy.MaxRequestBytes)]
+        public async Task<IActionResult> Upload(Guid eventId, List<IFormFile>? files)
         {
             var evt = await _db.Events.FindAsync(eventId);
             if (evt is null)
@@ -63,24 +68,139 @@ namespace AlgoForge.Controllers
                 return Challenge();
             }
 
-            var uploadsDir = Path.Combine(_env.WebRootPath, "uploads", eventId.ToString());
+            var (uploaded, skipped) = await StoreAndDetectAsync(eventId, userId, files);
+
+            // One clustering pass for the whole batch. A pipeline outage must not lose the
+            // uploaded photos: they are already saved and can be re-clustered from the
+            // review grid once the service is back.
+            if (uploaded > 0 && !await TryReclusterAsync(eventId))
+            {
+                TempData["ErrorMessage"] =
+                    "Photos uploaded, but grouping people failed. Use Re-cluster on the identify page to retry.";
+            }
+
+            ReportOutcome(uploaded, skipped);
+            return RedirectToAction(nameof(Index), new { eventId });
+        }
+
+        // --- Folder upload (the batched path) -------------------------------------
+        //
+        // A folder off an event shoot is hundreds of files and several gigabytes, which the
+        // single-request form above cannot carry however high the size cap goes: detection
+        // runs inline at ~1-3s per photo (D16's known shortcut), so 300 photos is upwards of
+        // ten minutes in one request, past every proxy and browser timeout there is.
+        //
+        // So the browser slices the folder into small batches and posts them one after
+        // another, each its own short request. That also buys a real progress indicator and
+        // makes a mid-way failure cost one batch instead of the entire folder.
+        //
+        // Clustering is deliberately NOT run per batch. It is O(n^2) over the event's
+        // detections and it is the whole event's grouping, so running it 40 times while a
+        // folder uploads would be slow and pointless -- the client calls FinishUpload once
+        // at the end instead.
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        [RequireEventRole(EventRole.Photographer)]
+        [RequestSizeLimit(PhotoUploadPolicy.MaxRequestBytes)]
+        [RequestFormLimits(MultipartBodyLengthLimit = PhotoUploadPolicy.MaxRequestBytes)]
+        public async Task<IActionResult> UploadBatch(Guid eventId, List<IFormFile>? files)
+        {
+            var evt = await _db.Events.FindAsync(eventId);
+            if (evt is null)
+            {
+                return NotFound();
+            }
+
+            var userIdText = _userManager.GetUserId(User);
+            if (userIdText is null || !Guid.TryParse(userIdText, out var userId))
+            {
+                return Unauthorized();
+            }
+
+            var (uploaded, skipped) = await StoreAndDetectAsync(eventId, userId, files);
+            return Json(new { uploaded, skipped });
+        }
+
+        // Runs the single clustering pass once the last batch has landed, and records the
+        // run's totals for the gallery to show.
+        //
+        // The tallies come back from the client because they were accumulated across many
+        // requests and no single one of them knows the whole story. They are display-only --
+        // nothing is authorised or written from them -- so a client that reports nonsense
+        // only misleads itself about its own upload.
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        [RequireEventRole(EventRole.Photographer)]
+        public async Task<IActionResult> FinishUpload(
+            Guid eventId, int uploaded, List<string>? skipped)
+        {
+            var evt = await _db.Events.FindAsync(eventId);
+            if (evt is null)
+            {
+                return NotFound();
+            }
+
+            var clustered = true;
+            if (uploaded > 0)
+            {
+                clustered = await TryReclusterAsync(eventId);
+            }
+
+            ReportOutcome(uploaded, skipped ?? new List<string>());
+
+            if (!clustered)
+            {
+                TempData["ErrorMessage"] =
+                    "Photos uploaded, but grouping people failed. Use Re-cluster on the identify page to retry.";
+            }
+
+            return Json(new { clustered });
+        }
+
+        // Stores each accepted file and runs detection on it. Shared by the plain form post
+        // and the batched folder upload so both apply exactly the same validation.
+        private async Task<(int Uploaded, List<string> Skipped)> StoreAndDetectAsync(
+            Guid eventId, Guid userId, List<IFormFile>? files)
+        {
+            // Model binding leaves this null when the form carries no file part at all,
+            // which is exactly what a folder of nothing but sidecar files produces once the
+            // browser-side filter has finished with it.
+            files ??= new List<IFormFile>();
+
+            // App_Data, not wwwroot: wwwroot is watched by dotnet watch / Visual Studio hot
+            // reload, so writing uploads there makes every upload look like a source change --
+            // the dev server re-evaluates the project and refreshes the browser mid-upload,
+            // which killed the batched uploader from the photographer's point of view.
+            // Program.cs maps this directory back onto the same /uploads URL.
+            var uploadsDir = Path.Combine(
+                _env.ContentRootPath, "App_Data", "uploads", eventId.ToString());
             Directory.CreateDirectory(uploadsDir);
+
+            var uploaded = 0;
+            var skipped = new List<string>();
 
             foreach (var file in files)
             {
-                if (file.Length == 0)
+                // Sniffed server-side, and the extension it returns is the one the file is
+                // stored under -- see PhotoUploadPolicy for why the client's filename is
+                // never trusted for this.
+                var inspection = await PhotoUploadPolicy.InspectAsync(file, HttpContext.RequestAborted);
+                if (!inspection.Accepted)
                 {
+                    // A folder upload legitimately contains non-images. Skipping them with a
+                    // reason is the correct outcome, not an error -- failing the batch
+                    // because of one Thumbs.db would make folder upload unusable.
+                    skipped.Add($"{SafeDisplayName(file.FileName)} ({inspection.Reason})");
                     continue;
                 }
 
                 var photoId = Guid.NewGuid();
-                var extension = Path.GetExtension(file.FileName);
-                var fileName = $"{photoId}{extension}";
+                var fileName = $"{photoId}{inspection.Extension}";
                 var filePath = Path.Combine(uploadsDir, fileName);
 
                 await using (var stream = new FileStream(filePath, FileMode.Create))
                 {
-                    await file.CopyToAsync(stream);
+                    await file.CopyToAsync(stream, HttpContext.RequestAborted);
                 }
 
                 var photo = new Photo
@@ -100,27 +220,84 @@ namespace AlgoForge.Controllers
                 // re-cluster-per-photo approach.
                 //
                 // Still synchronous, and still the wrong place for this: D16 says never in
-                // the request path, and at ~1-3s per photo a large batch will time out.
-                // The seam to fix it is right here -- enqueue instead of awaiting.
+                // the request path. The seam to fix it is right here -- enqueue instead of
+                // awaiting.
                 await _pipeline.ProcessPhotoAsync(photo, filePath);
                 await _db.SaveChangesAsync();
+                uploaded++;
             }
 
-            // One clustering pass for the whole batch. A pipeline outage must not lose the
-            // uploaded photos: they are already saved and can be re-clustered from the
-            // review grid once the service is back.
+            return (uploaded, skipped);
+        }
+
+        private async Task<bool> TryReclusterAsync(Guid eventId)
+        {
             try
             {
                 await _pipeline.ReclusterEventAsync(eventId);
+                return true;
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Clustering failed for event {EventId} after upload.", eventId);
-                TempData["ErrorMessage"] =
-                    "Photos uploaded, but grouping people failed. Use Re-cluster on the identify page to retry.";
+                return false;
+            }
+        }
+
+        // Says what actually happened to the selection. Silence here is what made the old
+        // behaviour confusing: a file the server quietly declined simply never appeared in
+        // the gallery, with nothing anywhere to say why.
+        private void ReportOutcome(int uploaded, List<string> skipped)
+        {
+            if (uploaded > 0)
+            {
+                var message = uploaded == 1 ? "1 photo uploaded." : $"{uploaded} photos uploaded.";
+                if (skipped.Count > 0)
+                {
+                    message += $" {skipped.Count} file(s) skipped.";
+                }
+
+                TempData["SuccessMessage"] = message;
             }
 
-            return RedirectToAction(nameof(Index), new { eventId });
+            if (skipped.Count == 0)
+            {
+                if (uploaded == 0)
+                {
+                    TempData["ErrorMessage"] = "No files were selected.";
+                }
+
+                return;
+            }
+
+            // Naming every skipped file in a folder of hundreds would bury the message it is
+            // attached to, so the list is capped and the remainder counted.
+            const int maxNamed = 10;
+            var named = string.Join(", ", skipped.Take(maxNamed));
+            if (skipped.Count > maxNamed)
+            {
+                named += $" and {skipped.Count - maxNamed} more";
+            }
+
+            var detail = $"Skipped: {named}.";
+            TempData["ErrorMessage"] = uploaded > 0
+                ? detail
+                : $"Nothing was uploaded. {detail}";
+        }
+
+        // The uploaded filename is attacker-controlled and is about to be echoed into a
+        // page. Razor encodes it, but a folder upload can carry a relative path
+        // ("subfolder/IMG_1.jpg") and a 200-character name, so it is trimmed to the leaf
+        // and bounded before it ever reaches the view.
+        private static string SafeDisplayName(string? fileName)
+        {
+            if (string.IsNullOrWhiteSpace(fileName))
+            {
+                return "(unnamed)";
+            }
+
+            var leaf = fileName.Replace('\\', '/').Split('/').Last();
+            return leaf.Length <= 60 ? leaf : string.Concat(leaf.AsSpan(0, 57), "...");
         }
 
         // The gallery shows every visible photo to every event member -- the photographs are
@@ -131,6 +308,11 @@ namespace AlgoForge.Controllers
         // yet agreed to) and unidentified faces render no box at all. Deliberately: reading
         // the cluster link here instead would name people before they'd agreed, and would keep
         // naming them after they'd rejected the tag.
+        //
+        // Open to every role in the event, including Delegate: D20 makes the gallery a
+        // normal complete gallery for members, and D5 gives delegates view + download.
+        [RequireEventRole(
+            EventRole.Coordinator, EventRole.Photographer, EventRole.Attendee, EventRole.Delegate)]
         public async Task<IActionResult> Index(Guid eventId)
         {
             var evt = await _db.Events.FindAsync(eventId);
