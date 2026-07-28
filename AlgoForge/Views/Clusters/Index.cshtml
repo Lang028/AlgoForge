@@ -17,17 +17,70 @@
                              .FirstOrDefault();
 }
 
-<div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
-    <div>
-        <h2>@eventName &mdash; Identify people</h2>
-        <p class="text-muted mb-0">
-            Link each group to someone on the invitee list. Linking suggests tags across every photo
-            that person is clearly visible in &mdash; they still have to confirm before anything is final.
-        </p>
+<style>
+    .cluster-card {
+        width: 320px;
+        background: #fff;
+        border-radius: 18px;
+        overflow: hidden;
+    }
+
+    .cluster-photo { position: relative; line-height: 0; }
+    .cluster-photo img { width: 100%; display: block; }
+
+    .cluster-face-box {
+        position: absolute;
+        border: 2px solid #f4502a;
+        border-radius: 4px;
+        box-sizing: border-box;
+    }
+
+    .cluster-card .body { padding: 1rem 1.1rem 1.2rem; }
+
+    .shaky {
+        border-left: 3px solid #f4502a;
+        padding-left: .5rem;
+    }
+
+    .cluster-card .form-select {
+        background: #f3f4f6;
+        border: 1.5px solid transparent;
+        border-radius: 12px 0 0 12px;
+        font-size: .85rem;
+    }
+
+    .cluster-card .form-select:focus {
+        background: #fff;
+        border-color: #f4502a;
+        box-shadow: none;
+    }
+
+    .cluster-card .btn-identify {
+        background: #f4502a;
+        color: #fff;
+        border: 0;
+        border-radius: 0 12px 12px 0;
+        font-weight: 600;
+        font-size: .85rem;
+    }
+
+    .cluster-card .btn-identify:hover { background: #d84523; color: #fff; }
+</style>
+
+<div class="gk-hero my-2">
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+        <div>
+            <h1>Identify people</h1>
+            <div class="crumb">Geeked On <span class="sep">&rsaquo;</span> @eventName <span class="sep">&rsaquo;</span> Identify</div>
+            <p class="hero-sub">
+                Link each group to someone on the invitee list. Linking suggests tags across every photo
+                that person is clearly visible in &mdash; they still have to confirm before anything is final.
+            </p>
+        </div>
+        <form method="post" asp-action="Recluster" asp-route-eventId="@eventId">
+            <button type="submit" class="btn gk-btn-soft">Re-cluster event</button>
+        </form>
     </div>
-    <form method="post" asp-action="Recluster" asp-route-eventId="@eventId">
-        <button type="submit" class="btn btn-outline-secondary">Re-cluster event</button>
-    </form>
 </div>
 
 @if (TempData["SuccessMessage"] is string success)
@@ -39,17 +92,12 @@
     <div class="alert alert-danger mt-3">@error</div>
 }
 
-<style>
-    .cluster-card { max-width: 340px; }
-    .cluster-photo { position: relative; line-height: 0; }
-    .cluster-photo img { max-width: 100%; display: block; }
-    .cluster-face-box { position: absolute; border: 2px solid #ffc107; box-sizing: border-box; }
-    .shaky { border-left: 3px solid #dc3545; padding-left: .5rem; }
-</style>
-
 @if (!Model.Any())
 {
-    <p class="mt-3">No people grouped yet &mdash; upload photos first, then re-cluster.</p>
+    <div class="gk-panel text-center text-muted mt-3 py-5">
+        <p class="fw-semibold mb-1">No people grouped yet.</p>
+        <p style="font-size:.85rem;" class="mb-0">Upload photos first, then re-cluster.</p>
+    </div>
 }
 else
 {
@@ -64,7 +112,7 @@ else
                                             .OrderBy(d => d.ClusterConfidence)
                                             .FirstOrDefault();
 
-            <div class="card cluster-card">
+            <div class="cluster-card">
                 @if (cover?.Photo is not null)
                 {
                     <div class="cluster-photo">
@@ -73,8 +121,8 @@ else
                              style="left: @Pct(cover.FaceX ?? cover.BoxX)%; top: @Pct(cover.FaceY ?? cover.BoxY)%; width: @Pct(cover.FaceWidth ?? cover.BoxWidth)%; height: @Pct(cover.FaceHeight ?? cover.BoxHeight)%;"></div>
                     </div>
                 }
-                <div class="card-body">
-                    <p class="mb-1">Clearly visible in @photoCount photo(s)</p>
+                <div class="body">
+                    <p class="mb-1 fw-semibold" style="font-size:.88rem; color:#14141c;">Clearly visible in @photoCount photo(s)</p>
 
                     @if (weakest is not null && weakest.ClusterConfidence < 0.7)
                     {
@@ -86,7 +134,7 @@ else
 
                     @if (cluster.Status == AlgoForge.Models.PersonClusterStatus.Identified)
                     {
-                        <span class="badge bg-success">Identified: @cluster.LinkedAttendee?.Name</span>
+                        <span class="gk-pill violet">Identified: @cluster.LinkedAttendee?.Name</span>
                     }
                     else
                     {
@@ -100,12 +148,12 @@ else
                                         <option value="@attendee.Id">@attendee.Name</option>
                                     }
                                 </select>
-                                <button type="submit" class="btn btn-primary">Identify</button>
+                                <button type="submit" class="btn btn-identify">Identify</button>
                             </div>
                         </form>
                         <form method="post" asp-action="Ignore" asp-route-eventId="@eventId">
                             <input type="hidden" name="clusterId" value="@cluster.Id" />
-                            <button type="submit" class="btn btn-sm btn-outline-secondary">Not an attendee</button>
+                            <button type="submit" class="btn gk-btn-soft gk-btn-sm">Not an attendee</button>
                         </form>
                     }
                 </div>
@@ -114,4 +162,4 @@ else
     </div>
 }
 
-<p class="mt-3"><a asp-controller="Photos" asp-action="Index" asp-route-eventId="@eventId">Back to gallery</a></p>
+<p class="mt-3"><a class="gk-link" asp-controller="Photos" asp-action="Index" asp-route-eventId="@eventId">&larr; Back to gallery</a></p>

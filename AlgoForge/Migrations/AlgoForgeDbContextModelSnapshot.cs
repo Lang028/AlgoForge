@@ -142,6 +142,9 @@ namespace AlgoForge.Migrations
                     b.Property<Guid>("EventId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<DateTime?>("InviteSentAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<string>("InviteToken")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");

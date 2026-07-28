@@ -78,12 +78,46 @@ namespace AlgoForge.Controllers
                 return View(model);
             }
 
-            var result = await _signInManager.PasswordSignInAsync(model.Email, model.Password, model.RememberMe, lockoutOnFailure: false);
+            // The user is resolved up front (rather than reading User after sign-in,
+            // which still holds the anonymous principal for this request) so the role
+            // claim and membership check below run against the right account.
+            var user = await _userManager.FindByEmailAsync(model.Email);
+            if (user is null)
+            {
+                ModelState.AddModelError(string.Empty, "Invalid login attempt.");
+                return View(model);
+            }
+
+            var result = await _signInManager.PasswordSignInAsync(user, model.Password, model.RememberMe, lockoutOnFailure: false);
             if (!result.Succeeded)
             {
                 ModelState.AddModelError(string.Empty, "Invalid login attempt.");
                 return View(model);
             }
+
+            // A platform admin who signs in here goes straight to the admin console --
+            // the role dropdown and ActiveRole claim are member concepts.
+            if (await _userManager.IsInRoleAsync(user, Data.DbInitializer.SystemAdminRole))
+            {
+                return RedirectToAction(nameof(AdminController.Index), "Admin");
+            }
+
+            // Persist the chosen role as an "ActiveRole" claim and refresh the cookie so
+            // the whole app can read it. It is a lens, not a permission: per-event access
+            // still comes from EventMembership via RequireEventRole.
+            var role = model.SelectedRole!.Value;
+            var existingClaim = (await _userManager.GetClaimsAsync(user))
+                .FirstOrDefault(c => c.Type == "ActiveRole");
+            var newClaim = new System.Security.Claims.Claim("ActiveRole", role.ToString());
+            if (existingClaim is null)
+            {
+                await _userManager.AddClaimAsync(user, newClaim);
+            }
+            else if (existingClaim.Value != newClaim.Value)
+            {
+                await _userManager.ReplaceClaimAsync(user, existingClaim, newClaim);
+            }
+            await _signInManager.RefreshSignInAsync(user);
 
             // Explicit returnUrl always wins over the role dropdown -- e.g. someone
             // following a claim link shouldn't get bounced to a role dashboard instead.
@@ -92,32 +126,29 @@ namespace AlgoForge.Controllers
                 return Redirect(returnUrl);
             }
 
-            if (model.SelectedRole is { } role)
+            // Signing in with a role you hold on no event is allowed -- a new coordinator
+            // has to be able to get in to create their first event -- but the dashboard
+            // explains how to actually get that role. Admin is backed by
+            // Organisation.AdminUserId rather than EventMembership.
+            var hasRole = role == EventRole.Admin
+                ? await _db.Organisations.AnyAsync(o => o.AdminUserId == user.Id)
+                : await _db.EventMemberships.AnyAsync(m => m.UserId == user.Id && m.Role == role);
+            if (!hasRole)
             {
-                var userIdText = _userManager.GetUserId(User);
-                if (userIdText is not null && Guid.TryParse(userIdText, out var userId))
+                TempData["InfoMessage"] = role switch
                 {
-                    var hasRole = await _db.EventMemberships
-                        .AnyAsync(m => m.UserId == userId && m.Role == role);
-
-                    if (!hasRole)
-                    {
-                        TempData["ErrorMessage"] = $"You don't have a {role} role on any event yet.";
-                        return RedirectToAction(nameof(HomeController.Index), "Home");
-                    }
-
-                    return role switch
-                    {
-                        EventRole.Coordinator => RedirectToAction(nameof(EventsController.Index), "Events"),
-                        EventRole.Photographer => RedirectToAction(nameof(PhotosController.Index), "Photos"),
-                        EventRole.Attendee => RedirectToAction(nameof(ConnectionsController.Index), "Connections"),
-                        EventRole.Delegate => RedirectToAction(nameof(EventsController.Index), "Events"),
-                        _ => RedirectToAction(nameof(HomeController.Index), "Home")
-                    };
-                }
+                    EventRole.Admin =>
+                        "You don't administer any organisation yet. Create one to get started.",
+                    EventRole.Coordinator =>
+                        "You don't have a Coordinator role on any event yet. Create your first event to get started.",
+                    EventRole.Photographer =>
+                        "You don't have a Photographer role on any event yet. Create an event, or ask a coordinator to add you to theirs.",
+                    _ =>
+                        $"You don't have a {role} role on any event yet. Open the invitation link from your email to claim your attendee record."
+                };
             }
 
-            return RedirectToLocal(returnUrl);
+            return RedirectToAction(nameof(HomeController.Index), "Home");
         }
 
         [HttpPost]

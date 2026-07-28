@@ -6,48 +6,79 @@
     var noAttendeeRecord = ViewData["NoAttendeeRecord"] is true;
 }
 
-<h2>@eventName &mdash; My tags</h2>
+<style>
+    .tag-card {
+        width: 300px;
+        background: #fff;
+        border-radius: 18px;
+        overflow: hidden;
+        transition: transform .15s, box-shadow .15s;
+    }
+
+    .tag-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 14px 34px rgba(20, 20, 28, .12);
+    }
+
+    .tag-card img {
+        width: 100%;
+        aspect-ratio: 4 / 3;
+        object-fit: cover;
+        display: block;
+    }
+
+    .tag-card .body { padding: .9rem 1rem 1.1rem; }
+</style>
+
+<div class="gk-hero my-2">
+    <h1>My tags</h1>
+    <div class="crumb">Geeked On <span class="sep">&rsaquo;</span> @eventName <span class="sep">&rsaquo;</span> Tags</div>
+    <p class="hero-sub">Every tag needs your say-so. Confirm the ones that are really you; reject the rest &mdash; nothing goes public without your approval.</p>
+</div>
 
 @if (noAttendeeRecord)
 {
-    <div class="alert alert-warning">
+    <div class="alert alert-warning mt-3">
         You don't have an attendee record for this event yet, so there's nothing to review.
         (In the full build this is set automatically when you claim your invite; for this demo it's seeded directly.)
     </div>
 }
 else if (!Model.Any())
 {
-    <p class="text-muted">No one has tagged you in a photo yet.</p>
+    <div class="gk-panel text-center text-muted mt-3 py-5">
+        <p class="fw-semibold mb-1">No one has tagged you in a photo yet.</p>
+        <p style="font-size:.85rem;" class="mb-0">When a photographer identifies you, the suggested tags land here.</p>
+    </div>
 }
 else
 {
-    <div class="d-flex flex-wrap gap-3">
+    <div class="d-flex flex-wrap gap-3 mt-3">
         @foreach (var tag in Model)
         {
             var photo = tag.PersonDetection?.Photo;
-            var statusBadge = tag.Status switch
+            var pillClass = tag.Status switch
             {
-                AlgoForge.Models.TagStatus.Confirmed => "bg-success",
-                AlgoForge.Models.TagStatus.Rejected => "bg-secondary",
-                _ => "bg-warning text-dark"
+                AlgoForge.Models.TagStatus.Confirmed => "violet",
+                AlgoForge.Models.TagStatus.Rejected => "grey",
+                _ => "coral"
             };
 
-            <div class="card" style="width: 320px;">
+            <div class="tag-card">
                 @if (photo is not null)
                 {
-                    <img src="@photo.BlobUrl" class="card-img-top" alt="Tagged photo" />
+                    <img src="@photo.BlobUrl" alt="Tagged photo" />
                 }
-                <div class="card-body">
-                    <span class="badge @statusBadge mb-2">@tag.Status</span>
+                <div class="body">
+                    <span class="gk-pill @pillClass mb-2">@tag.Status</span>
 
                     @if (tag.Status == AlgoForge.Models.TagStatus.Suggested)
                     {
-                        <div class="d-flex gap-2">
+                        <div class="d-flex gap-2 mt-2">
                             <form method="post" asp-action="Confirm" asp-route-eventId="@eventId" asp-route-tagId="@tag.Id">
-                                <button type="submit" class="btn btn-sm btn-success">Confirm</button>
+                                <button type="submit" class="btn gk-btn-coral gk-btn-sm">Confirm</button>
                             </form>
                             <form method="post" asp-action="Reject" asp-route-eventId="@eventId" asp-route-tagId="@tag.Id">
-                                <button type="submit" class="btn btn-sm btn-outline-secondary">Reject</button>
+                                <button type="submit" class="btn gk-btn-soft gk-btn-sm">Reject</button>
                             </form>
                         </div>
                     }
@@ -57,4 +88,4 @@ else
     </div>
 }
 
-<p class="mt-3"><a asp-controller="Photos" asp-action="Index" asp-route-eventId="@eventId">Back to gallery</a></p>
+<p class="mt-3"><a class="gk-link" asp-controller="Photos" asp-action="Index" asp-route-eventId="@eventId">&larr; Back to gallery</a></p>

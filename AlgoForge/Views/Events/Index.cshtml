@@ -1,48 +1,264 @@
-@model List<AlgoForge.Models.Event>
+@model List<AlgoForge.ViewModels.Events.EventCardViewModel>
+@using AlgoForge.Models
 @{
     ViewData["Title"] = "Events";
+
+    string PillClass(EventStatus s) => s switch
+    {
+        EventStatus.Live => "live",
+        EventStatus.Draft => "draft",
+        EventStatus.PostEvent => "post",
+        _ => "archived"
+    };
 }
 
-<h2>Events</h2>
-<a class="btn btn-primary mb-3" asp-action="Create">Create event</a>
+<style>
+    body {
+        background: #e9eaee;
+    }
+
+    /* ---------- hero ---------- */
+    .events-hero {
+        background: #14141c;
+        border-radius: 24px;
+        padding: 3.5rem 2.5rem;
+        color: #fff;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .events-hero::before,
+    .events-hero::after {
+        content: "";
+        position: absolute;
+        border-radius: 50%;
+        filter: blur(60px);
+        opacity: .45;
+    }
+
+    .events-hero::before {
+        width: 260px;
+        height: 260px;
+        background: #f4502a;
+        top: -80px;
+        right: -60px;
+    }
+
+    .events-hero::after {
+        width: 220px;
+        height: 220px;
+        background: #7c5cfc;
+        bottom: -90px;
+        left: 30%;
+    }
+
+    .events-hero h1 {
+        font-weight: 800;
+        font-size: 2.6rem;
+        margin-bottom: .35rem;
+        position: relative;
+        z-index: 1;
+    }
+
+    .events-hero .crumb {
+        text-transform: uppercase;
+        letter-spacing: .12em;
+        font-size: .72rem;
+        color: rgba(255, 255, 255, .65);
+        position: relative;
+        z-index: 1;
+    }
+
+    .events-hero .crumb .sep { margin: 0 .4rem; color: #f4502a; }
+
+    .events-hero .btn-create {
+        background: #f4502a;
+        color: #fff;
+        border-radius: 999px;
+        font-weight: 600;
+        padding: .55rem 1.4rem;
+        border: 0;
+        position: relative;
+        z-index: 1;
+    }
+
+    .events-hero .btn-create:hover { background: #d84523; color: #fff; }
+
+    /* ---------- cards ---------- */
+    .event-card {
+        background: #fff;
+        border-radius: 18px;
+        overflow: hidden;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        transition: transform .15s, box-shadow .15s;
+    }
+
+    .event-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 16px 40px rgba(20, 20, 28, .14);
+    }
+
+    .event-cover {
+        display: block;
+        aspect-ratio: 16 / 10;
+        width: 100%;
+        object-fit: cover;
+        background: #14141c;
+    }
+
+    .event-cover.placeholder {
+        background: linear-gradient(135deg, #14141c 0%, #7c5cfc 60%, #f4502a 120%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: rgba(255, 255, 255, .85);
+        font-size: 2rem;
+    }
+
+    .event-body {
+        padding: 1.1rem 1.25rem 1.25rem;
+        display: flex;
+        flex-direction: column;
+        flex-grow: 1;
+    }
+
+    .event-meta {
+        display: flex;
+        align-items: center;
+        gap: .6rem;
+        margin-bottom: .55rem;
+    }
+
+    .status-pill {
+        border-radius: 999px;
+        font-size: .68rem;
+        font-weight: 700;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        color: #fff;
+        padding: .28rem .7rem;
+    }
+
+    .status-pill.live { background: #f4502a; }
+    .status-pill.draft { background: #7c5cfc; }
+    .status-pill.post { background: #14141c; }
+    .status-pill.archived { background: #9ca3af; }
+
+    .event-meta small { color: #9ca3af; font-weight: 500; }
+
+    .event-body h5 {
+        font-weight: 700;
+        margin-bottom: .4rem;
+        color: #14141c;
+    }
+
+    .event-org {
+        font-size: .78rem;
+        color: #f4502a;
+        font-weight: 600;
+        margin-bottom: .9rem;
+    }
+
+    .event-stats {
+        font-size: .78rem;
+        color: #6b7280;
+        margin-bottom: .9rem;
+    }
+
+    .event-actions {
+        margin-top: auto;
+        display: flex;
+        flex-wrap: wrap;
+        gap: .4rem;
+    }
+
+    .event-actions .btn {
+        border-radius: 999px;
+        font-size: .75rem;
+        font-weight: 600;
+        padding: .3rem .85rem;
+    }
+
+    .btn-coral {
+        background: #f4502a;
+        color: #fff;
+    }
+
+    .btn-coral:hover { background: #d84523; color: #fff; }
+
+    .btn-soft {
+        background: #f3f4f6;
+        color: #14141c;
+    }
+
+    .btn-soft:hover { background: #e5e7eb; color: #14141c; }
+</style>
+
+<div class="events-hero my-2">
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+        <div>
+            <h1>Events</h1>
+            <div class="crumb">Geeked On <span class="sep">&rsaquo;</span> Events</div>
+        </div>
+        <a class="btn btn-create" asp-action="Create">+ Create event</a>
+    </div>
+</div>
 
 @if (TempData["SuccessMessage"] is string success)
 {
-    <div class="alert alert-success">@success</div>
+    <div class="alert alert-success rounded-4 mt-3">@success</div>
+}
+@if (TempData["ErrorMessage"] is string error)
+{
+    <div class="alert alert-danger rounded-4 mt-3">@error</div>
 }
 
 @if (!Model.Any())
 {
-    <p>No events yet.</p>
+    <div class="text-center text-muted py-5">
+        <p class="mb-1 fw-semibold">No events yet.</p>
+        <p style="font-size:.85rem;">Create one to get started.</p>
+    </div>
 }
 else
 {
-    <table class="table">
-        <thead>
-            <tr>
-                <th>Name</th>
-                <th>Organisation</th>
-                <th>Date</th>
-                <th>Status</th>
-                <th></th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var evt in Model)
-            {
-                <tr>
-                    <td>@evt.Name</td>
-                    <td>@evt.Organisation?.Name</td>
-                    <td>@evt.EventDate.ToString("d")</td>
-                    <td>@evt.Status</td>
-                    <td>
-                        <a class="btn btn-sm btn-primary" asp-controller="Photos" asp-action="Index" asp-route-eventId="@evt.Id">Gallery</a>
-                        <a class="btn btn-sm btn-outline-primary" asp-controller="Photos" asp-action="Upload" asp-route-eventId="@evt.Id">Upload</a>
-                        <a class="btn btn-sm btn-outline-secondary" asp-action="Attendees" asp-route-eventId="@evt.Id">Attendees</a>
-                        <a class="btn btn-sm btn-outline-secondary" asp-action="ImportAttendees" asp-route-eventId="@evt.Id">Import CSV</a>
-                    </td>
-                </tr>
-            }
-        </tbody>
-    </table>
+    <div class="row g-4 mt-1 mb-4">
+        @foreach (var evt in Model)
+        {
+            <div class="col-md-6 col-lg-4">
+                <div class="event-card">
+                    <a asp-controller="Photos" asp-action="Index" asp-route-eventId="@evt.Id">
+                        @if (evt.CoverUrl is not null)
+                        {
+                            <img class="event-cover" src="@evt.CoverUrl" alt="@evt.Name cover photo" loading="lazy" />
+                        }
+                        else
+                        {
+                            <div class="event-cover placeholder">&#128247;</div>
+                        }
+                    </a>
+                    <div class="event-body">
+                        <div class="event-meta">
+                            <span class="status-pill @PillClass(evt.Status)">@evt.Status</span>
+                            <small>@evt.EventDate.ToString("yyyy-MM-dd")</small>
+                        </div>
+                        <h5>@evt.Name</h5>
+                        <div class="event-org">&#128205; @evt.OrganisationName</div>
+                        <div class="event-stats">
+                            @evt.PhotoCount photo@(evt.PhotoCount == 1 ? "" : "s") &middot;
+                            @evt.AttendeeCount attendee@(evt.AttendeeCount == 1 ? "" : "s")
+                        </div>
+                        <div class="event-actions">
+                            <a class="btn btn-coral" asp-controller="Photos" asp-action="Index" asp-route-eventId="@evt.Id">Gallery</a>
+                            <a class="btn btn-soft" asp-controller="Photos" asp-action="Upload" asp-route-eventId="@evt.Id">Upload</a>
+                            <a class="btn btn-soft" asp-action="Attendees" asp-route-eventId="@evt.Id">Attendees</a>
+                            <a class="btn btn-soft" asp-action="ImportAttendees" asp-route-eventId="@evt.Id">Import CSV</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
 }

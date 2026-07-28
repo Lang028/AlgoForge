@@ -20,10 +20,11 @@ namespace AlgoForge.ViewModels.Account
         [Display(Name = "Remember me")]
         public bool RememberMe { get; set; }
 
-        // Which role the person intends to use this session for. Purely a
-        // routing hint post-login -- actual permissions still come from
-        // EventMembership, this just decides where to land them.
-        [Display(Name = "Log in as")]
+        // Which role the person intends to use this session for. Actual permissions
+        // still come from EventMembership -- this shapes what the dashboard and
+        // navigation show, it never grants access by itself.
+        [Required(ErrorMessage = "Please choose the role you want to sign in as.")]
+        [Display(Name = "Sign in as")]
         public EventRole? SelectedRole { get; set; }
     }
 }

@@ -1,24 +1,26 @@
-﻿@model AlgoForge.ViewModels.Events.ImportAttendeesViewModel
+@model AlgoForge.ViewModels.Events.ImportAttendeesViewModel
 @using AlgoForge.ViewModels.Events
 @{
-    ViewData["Title"] = "Import Attendees — " + Model.EventName;
+    ViewData["Title"] = "Import attendees — " + Model.EventName;
 }
 
-<h2>Import Attendees</h2>
-<h5 class="text-muted mb-4">Event: @Model.EventName</h5>
+<div class="gk-hero my-2">
+    <h1>Import attendees</h1>
+    <div class="crumb">Geeked On <span class="sep">&rsaquo;</span> @Model.EventName <span class="sep">&rsaquo;</span> Attendees</div>
+</div>
 
 @if (TempData["SuccessMessage"] is string successMsg)
 {
-    <div class="alert alert-success">@successMsg</div>
+    <div class="alert alert-success mt-3">@successMsg</div>
 }
 @if (TempData["ErrorMessage"] is string errMsg)
 {
-    <div class="alert alert-danger">@errMsg</div>
+    <div class="alert alert-danger mt-3">@errMsg</div>
 }
 
 @if (!ViewData.ModelState.IsValid)
 {
-    <div class="alert alert-danger">
+    <div class="alert alert-danger mt-3">
         @foreach (var error in ViewData.ModelState.Values.SelectMany(v => v.Errors))
         {
             <div>@error.ErrorMessage</div>
@@ -32,26 +34,29 @@
     int validCount = result.ValidAttendees.Count;
     int errorCount = result.Errors.Count;
 
-    <div class="alert alert-warning">
+    <div class="alert alert-warning mt-3">
         <strong>@errorCount row(s) failed, @validCount row(s) valid.</strong>
         Fix the file and re-upload, or proceed with only the @validCount valid row(s).
     </div>
 
-    <table class="table table-sm table-bordered mb-3">
-        <thead class="table-danger">
-            <tr><th>Row</th><th>Field</th><th>Reason</th></tr>
-        </thead>
-        <tbody>
-            @foreach (var err in result.Errors)
-            {
-                <tr>
-                    <td>@err.RowNumber</td>
-                    <td>@err.Field</td>
-                    <td>@err.Reason</td>
-                </tr>
-            }
-        </tbody>
-    </table>
+    <div class="gk-panel mt-2">
+        <h6 class="mb-2">Rows with problems</h6>
+        <table class="table gk-table">
+            <thead>
+                <tr><th>Row</th><th>Field</th><th>Reason</th></tr>
+            </thead>
+            <tbody>
+                @foreach (var err in result.Errors)
+                {
+                    <tr>
+                        <td>@err.RowNumber</td>
+                        <td class="fw-semibold">@err.Field</td>
+                        <td>@err.Reason</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
 
     @if (validCount > 0)
     {
@@ -59,7 +64,7 @@
               asp-controller="Events"
               asp-action="ImportAttendeesConfirm"
               asp-route-eventId="@Model.EventId"
-              class="mb-4">
+              class="my-3">
             @Html.AntiForgeryToken()
             @for (int i = 0; i < result.ValidAttendees.Count; i++)
             {
@@ -67,34 +72,35 @@
                 <input type="hidden" name="attendees[@i].Email"       value="@result.ValidAttendees[i].Email" />
                 <input type="hidden" name="attendees[@i].ContactInfo" value="@result.ValidAttendees[i].ContactInfo" />
             }
-            <button type="submit" class="btn btn-warning me-2">
+            <button type="submit" class="btn gk-btn-coral me-2">
                 Import @validCount valid row(s) anyway
             </button>
             <a asp-action="ImportAttendees" asp-route-eventId="@Model.EventId"
-               class="btn btn-outline-secondary">Cancel and fix the file</a>
+               class="btn gk-btn-soft">Cancel and fix the file</a>
         </form>
     }
 }
 
 @* ── Upload form ─────────────────────────────────────────────────────── *@
-<div class="card" style="max-width: 640px;">
-    <div class="card-header">Upload CSV file</div>
-    <div class="card-body">
-        <p class="mb-1 small text-muted">Required columns (any order):</p>
-        <p class="mb-2"><code>Name</code>, <code>Email</code>, <code>ContactInfo</code></p>
-        <p class="mb-3 small">
-            <a href="data:text/csv;charset=utf-8,Name%2CEmail%2CContactInfo%0AJane%20Doe%2Cjane%40example.com%2C%2B27%2081%20234%205678%0AJohn%20Smith%2Cjohn.smith%40example.com%2Cjohn%40company.com"
-               download="attendees_template.csv">Download template (CSV)</a>
-        </p>
+<div class="gk-panel gk-form mt-3" style="max-width: 640px;">
+    <h6 class="mb-3">Upload CSV file</h6>
+    <p class="mb-1 small text-muted">Required columns (any order):</p>
+    <p class="mb-2"><code>Name</code>, <code>Email</code>, <code>ContactInfo</code></p>
+    <p class="mb-3 small">
+        <a class="gk-link"
+           href="data:text/csv;charset=utf-8,Name%2CEmail%2CContactInfo%0AJane%20Doe%2Cjane%40example.com%2C%2B27%2081%20234%205678%0AJohn%20Smith%2Cjohn.smith%40example.com%2Cjohn%40company.com"
+           download="attendees_template.csv">Download template (CSV)</a>
+    </p>
 
-        <form method="post" asp-route-eventId="@Model.EventId" enctype="multipart/form-data">
-            @Html.AntiForgeryToken()
-            <div class="mb-3">
-                <label for="file" class="form-label">Select CSV file (max 10 MB)</label>
-                <input type="file" name="file" id="file" class="form-control" accept=".csv" required />
-            </div>
-            <button type="submit" class="btn btn-primary">Parse &amp; Preview</button>
-            <a asp-action="Index" class="btn btn-outline-secondary ms-2">Cancel</a>
-        </form>
-    </div>
+    <form method="post" asp-route-eventId="@Model.EventId" enctype="multipart/form-data">
+        @Html.AntiForgeryToken()
+        <div class="mb-3">
+            <label for="file" class="form-label">Select CSV file (max 10 MB)</label>
+            <input type="file" name="file" id="file" class="form-control" accept=".csv" required />
+        </div>
+        <div class="d-flex gap-2">
+            <button type="submit" class="btn gk-btn-coral">Parse &amp; preview</button>
+            <a asp-action="Index" class="btn gk-btn-soft">Cancel</a>
+        </div>
+    </form>
 </div>

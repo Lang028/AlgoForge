@@ -5,67 +5,77 @@
     var eventName = ViewData["EventName"];
 }
 
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <h2 class="mb-0">@eventName &mdash; Attendees</h2>
-    <div>
-        <a asp-action="AddAttendee" asp-route-eventId="@eventId" class="btn btn-primary">+ Add attendee</a>
-        <a asp-action="ImportAttendees" asp-route-eventId="@eventId" class="btn btn-outline-primary">Import CSV</a>
+<div class="gk-hero my-2">
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+        <div>
+            <h1>Attendees</h1>
+            <div class="crumb">Geeked On <span class="sep">&rsaquo;</span> Events <span class="sep">&rsaquo;</span> @eventName</div>
+        </div>
+        <div class="d-flex gap-2">
+            <a asp-action="AddAttendee" asp-route-eventId="@eventId" class="btn gk-btn-coral">+ Add attendee</a>
+            <a asp-action="ImportAttendees" asp-route-eventId="@eventId" class="btn gk-btn-soft">Import CSV</a>
+        </div>
     </div>
 </div>
 
 @if (TempData["SuccessMessage"] is string success)
 {
-    <div class="alert alert-success">@success</div>
+    <div class="alert alert-success mt-3">@success</div>
 }
 
 @if (!Model.Any())
 {
-    <p>
-        No attendees yet.
-        <a asp-action="ImportAttendees" asp-route-eventId="@eventId">Import a CSV</a>
-        or <a asp-action="AddAttendee" asp-route-eventId="@eventId">add one manually</a>.
-    </p>
+    <div class="gk-panel text-center text-muted mt-3 py-5">
+        <p class="fw-semibold mb-1">No attendees yet.</p>
+        <p style="font-size:.85rem;" class="mb-3">Import a CSV of your invitee list, or add people one at a time.</p>
+        <div class="d-flex justify-content-center gap-2">
+            <a class="btn gk-btn-coral gk-btn-sm" asp-action="ImportAttendees" asp-route-eventId="@eventId">Import a CSV</a>
+            <a class="btn gk-btn-soft gk-btn-sm" asp-action="AddAttendee" asp-route-eventId="@eventId">Add manually</a>
+        </div>
+    </div>
 }
 else
 {
-    <table class="table">
-        <thead>
-            <tr>
-                <th>Name</th>
-                <th>Email</th>
-                <th>Claimed</th>
-                <th></th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var attendee in Model)
-            {
+    <div class="gk-panel mt-3">
+        <table class="table gk-table">
+            <thead>
                 <tr>
-                    <td>@attendee.Name</td>
-                    <td>@attendee.Email</td>
-                    <td>
-                        @if (attendee.ClaimedByUserId.HasValue)
-                        {
-                            <span class="badge bg-success">Claimed</span>
-                        }
-                        else
-                        {
-                            <span class="badge bg-secondary">Not claimed</span>
-                        }
-                    </td>
-                    <td>
-                        <div class="d-flex gap-2">
-                            <form method="post" asp-action="SendInvite" asp-route-eventId="@eventId" asp-route-attendeeId="@attendee.Id">
-                                <button type="submit" class="btn btn-sm btn-outline-primary">Send invite</button>
-                            </form>
-                            <a asp-action="EditAttendee" asp-route-eventId="@eventId" asp-route-attendeeId="@attendee.Id"
-                               class="btn btn-sm btn-outline-secondary">Edit</a>
-                        </div>
-                    </td>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>Status</th>
+                    <th class="text-end"></th>
                 </tr>
-            }
-        </tbody>
-    </table>
+            </thead>
+            <tbody>
+                @foreach (var attendee in Model)
+                {
+                    <tr>
+                        <td class="fw-semibold">@attendee.Name</td>
+                        <td>@attendee.Email</td>
+                        <td>
+                            @if (attendee.ClaimedByUserId.HasValue)
+                            {
+                                <span class="gk-pill violet">Claimed</span>
+                            }
+                            else
+                            {
+                                <span class="gk-pill grey">Invited</span>
+                            }
+                        </td>
+                        <td class="text-end">
+                            <div class="d-flex gap-2 justify-content-end">
+                                <form method="post" asp-action="SendInvite" asp-route-eventId="@eventId" asp-route-attendeeId="@attendee.Id">
+                                    <button type="submit" class="btn gk-btn-coral gk-btn-sm">Send invite</button>
+                                </form>
+                                <a asp-action="EditAttendee" asp-route-eventId="@eventId" asp-route-attendeeId="@attendee.Id"
+                                   class="btn gk-btn-soft gk-btn-sm">Edit</a>
+                            </div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
 }
 
-<p class="mt-3"><a asp-action="Index">Back to events</a></p>
+<p class="mt-3"><a class="gk-link" asp-action="Index">&larr; Back to events</a></p>

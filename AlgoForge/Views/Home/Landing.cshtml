@@ -1,0 +1,286 @@
+@{
+    ViewData["Title"] = "Welcome";
+}
+
+<style>
+    body {
+        background: #e9eaee;
+    }
+
+    /* ---------- hero ---------- */
+    .land-hero {
+        background: #14141c;
+        border-radius: 24px;
+        padding: 4.5rem 3rem;
+        color: #fff;
+        position: relative;
+        overflow: hidden;
+        text-align: center;
+    }
+
+    .land-hero::before,
+    .land-hero::after {
+        content: "";
+        position: absolute;
+        border-radius: 50%;
+        filter: blur(80px);
+        opacity: .5;
+    }
+
+    .land-hero::before {
+        width: 320px;
+        height: 320px;
+        background: #f4502a;
+        top: -110px;
+        right: -80px;
+    }
+
+    .land-hero::after {
+        width: 280px;
+        height: 280px;
+        background: #7c5cfc;
+        bottom: -110px;
+        left: -70px;
+    }
+
+    .land-hero > * { position: relative; z-index: 1; }
+
+    .land-kicker {
+        display: inline-block;
+        border: 1px solid rgba(255, 255, 255, .25);
+        border-radius: 999px;
+        padding: .35rem 1rem;
+        font-size: .72rem;
+        letter-spacing: .14em;
+        text-transform: uppercase;
+        color: rgba(255, 255, 255, .75);
+        margin-bottom: 1.25rem;
+    }
+
+    .land-hero h1 {
+        font-weight: 800;
+        font-size: clamp(2rem, 5vw, 3.2rem);
+        line-height: 1.15;
+        max-width: 700px;
+        margin: 0 auto .9rem;
+    }
+
+    .land-hero h1 .accent { color: #f4502a; }
+
+    .land-hero .lead-text {
+        color: rgba(255, 255, 255, .7);
+        max-width: 560px;
+        margin: 0 auto 2rem;
+        font-size: 1rem;
+    }
+
+    .btn-hero-primary {
+        background: #f4502a;
+        color: #fff;
+        border-radius: 999px;
+        font-weight: 700;
+        padding: .7rem 1.8rem;
+        border: 0;
+    }
+
+    .btn-hero-primary:hover { background: #d84523; color: #fff; }
+
+    .btn-hero-ghost {
+        background: transparent;
+        color: #fff;
+        border: 1.5px solid rgba(255, 255, 255, .35);
+        border-radius: 999px;
+        font-weight: 600;
+        padding: .7rem 1.8rem;
+    }
+
+    .btn-hero-ghost:hover { border-color: #fff; color: #fff; }
+
+    /* ---------- feature cards ---------- */
+    .feature-card {
+        background: #fff;
+        border-radius: 18px;
+        padding: 1.75rem 1.6rem;
+        height: 100%;
+        transition: transform .15s, box-shadow .15s;
+    }
+
+    .feature-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 16px 40px rgba(20, 20, 28, .12);
+    }
+
+    .feature-icon {
+        width: 46px;
+        height: 46px;
+        border-radius: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.3rem;
+        margin-bottom: 1rem;
+        color: #fff;
+    }
+
+    .feature-icon.coral { background: #f4502a; }
+    .feature-icon.violet { background: #7c5cfc; }
+    .feature-icon.dark { background: #14141c; }
+
+    .feature-card h5 { font-weight: 700; color: #14141c; }
+
+    .feature-card p {
+        font-size: .88rem;
+        color: #6b7280;
+        margin: 0;
+    }
+
+    /* ---------- steps ---------- */
+    .steps-panel {
+        background: #fff;
+        border-radius: 24px;
+        padding: 2.5rem 2.5rem;
+    }
+
+    .steps-panel h3 { font-weight: 800; color: #14141c; }
+
+    .step-num {
+        width: 34px;
+        height: 34px;
+        border-radius: 50%;
+        background: #fef1ec;
+        color: #f4502a;
+        font-weight: 800;
+        font-size: .9rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+    .step-item { display: flex; gap: .9rem; }
+
+    .step-item h6 { font-weight: 700; margin-bottom: .2rem; color: #14141c; }
+
+    .step-item p { font-size: .84rem; color: #6b7280; margin: 0; }
+
+    /* ---------- bottom cta ---------- */
+    .land-cta {
+        background: linear-gradient(120deg, #7c5cfc, #f4502a);
+        border-radius: 24px;
+        color: #fff;
+        padding: 2.75rem 2.5rem;
+        text-align: center;
+    }
+
+    .land-cta h3 { font-weight: 800; margin-bottom: .5rem; }
+
+    .land-cta p { color: rgba(255, 255, 255, .85); margin-bottom: 1.5rem; }
+
+    .btn-cta-light {
+        background: #fff;
+        color: #14141c;
+        border-radius: 999px;
+        font-weight: 700;
+        padding: .65rem 1.7rem;
+        border: 0;
+    }
+
+    .btn-cta-light:hover { background: #f3f4f6; color: #14141c; }
+</style>
+
+<div class="my-2">
+    <section class="land-hero">
+        <div class="land-kicker">Consent-based event photography</div>
+        <h1>Every event photo. Every person. <span class="accent">Their choice.</span></h1>
+        <p class="lead-text">
+            Event photos are full of people you meant to follow up with and never did.
+            Geeked On turns a photo gallery into a consent-based networking layer.
+        </p>
+        <div class="d-flex justify-content-center gap-2 flex-wrap">
+            <a class="btn btn-hero-primary" asp-controller="Account" asp-action="Register">Create account</a>
+            <a class="btn btn-hero-ghost" asp-controller="Account" asp-action="Login">Sign in</a>
+        </div>
+    </section>
+
+    <div class="row g-4 mt-1">
+        <div class="col-md-4">
+            <div class="feature-card">
+                <div class="feature-icon coral">&#128247;</div>
+                <h5>Face pipeline</h5>
+                <p>
+                    Photos are detected and clustered by face across every album in an event,
+                    so a photographer can identify everyone in a few clicks instead of tagging
+                    each photo by hand.
+                </p>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="feature-card">
+                <div class="feature-icon violet">&#9989;</div>
+                <h5>Consent, not a checkbox</h5>
+                <p>
+                    Every suggested tag is reviewed by the attendee it belongs to before it's
+                    confirmed. Nothing is published without their say-so.
+                </p>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="feature-card">
+                <div class="feature-icon dark">&#129309;</div>
+                <h5>Reconnect after the event</h5>
+                <p>
+                    Browse the gallery, view profiles, and send connection requests to people
+                    you met &mdash; contact details are only shared once a connection is accepted.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <section class="steps-panel mt-4">
+        <h3 class="mb-4">How it works</h3>
+        <div class="row g-4">
+            <div class="col-md-3">
+                <div class="step-item">
+                    <div class="step-num">1</div>
+                    <div>
+                        <h6>Create your event</h6>
+                        <p>A coordinator sets up the event and imports the invitee list.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="step-item">
+                    <div class="step-num">2</div>
+                    <div>
+                        <h6>Photos come in</h6>
+                        <p>Photographers upload albums and the face pipeline clusters everyone automatically.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="step-item">
+                    <div class="step-num">3</div>
+                    <div>
+                        <h6>Attendees approve</h6>
+                        <p>Each person claims their invite, reviews suggested tags, and decides what goes public.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="step-item">
+                    <div class="step-num">4</div>
+                    <div>
+                        <h6>People reconnect</h6>
+                        <p>Connection requests go out; contact details are shared only when accepted.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="land-cta mt-4">
+        <h3>Ready to get started?</h3>
+        <p>Create a free account &mdash; host your own event or claim your photos from one you attended.</p>
+        <a class="btn btn-cta-light" asp-controller="Account" asp-action="Register">Get started</a>
+    </section>
+</div>

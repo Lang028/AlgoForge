@@ -9,8 +9,40 @@ namespace AlgoForge.Data
     // upload/face pipeline has somewhere to attach photos to during local testing.
     public static class DbInitializer
     {
-        public static async Task SeedAsync(AlgoForgeDbContext db, UserManager<ApplicationUser> userManager)
+        public const string SystemAdminRole = "SystemAdmin";
+        public const string SystemAdminEmail = "admin@geeked.ac.za";
+
+        public static async Task SeedAsync(
+            AlgoForgeDbContext db,
+            UserManager<ApplicationUser> userManager,
+            RoleManager<IdentityRole<Guid>> roleManager)
         {
+            // Platform admin: monitors the system through the read-only admin console and
+            // never participates in events. It is an Identity role, deliberately separate
+            // from EventRole -- RequireEventRole never matches it, so event content
+            // (galleries, attendee lists, tags) stays out of reach by construction.
+            if (!await roleManager.RoleExistsAsync(SystemAdminRole))
+            {
+                await roleManager.CreateAsync(new IdentityRole<Guid>(SystemAdminRole));
+            }
+
+            var systemAdmin = await userManager.FindByEmailAsync(SystemAdminEmail);
+            if (systemAdmin is null)
+            {
+                systemAdmin = new ApplicationUser
+                {
+                    UserName = SystemAdminEmail,
+                    Email = SystemAdminEmail,
+                    DisplayName = "System Admin",
+                    EmailConfirmed = true
+                };
+                await userManager.CreateAsync(systemAdmin, "Geeked@2026");
+            }
+            if (!await userManager.IsInRoleAsync(systemAdmin, SystemAdminRole))
+            {
+                await userManager.AddToRoleAsync(systemAdmin, SystemAdminRole);
+            }
+
             var demoEvent = await db.Events.FirstOrDefaultAsync(e => e.Name == "Demo Event");
 
             if (demoEvent is null)

@@ -1,44 +1,49 @@
 @model AlgoForge.ViewModels.Events.AttendeeFormViewModel
 @{
-    ViewData["Title"] = "Edit Attendee — " + Model.EventName;
+    ViewData["Title"] = "Edit attendee — " + Model.EventName;
 }
 
-<h2>Edit Attendee</h2>
-<h5 class="text-muted mb-4">Event: @Model.EventName</h5>
+<div class="gk-hero my-2">
+    <h1>Edit attendee</h1>
+    <div class="crumb">Geeked On <span class="sep">&rsaquo;</span> @Model.EventName <span class="sep">&rsaquo;</span> Attendees</div>
+</div>
 
 @if (Model.IsClaimed)
 {
-    <div class="alert alert-warning">
+    <div class="alert alert-warning mt-3">
         This person has already claimed their invite. Changing their email here won't change the
         address they sign in with &mdash; it only updates their contact card.
     </div>
 }
 
-<form method="post"
-      asp-action="EditAttendee"
-      asp-route-eventId="@Model.EventId"
-      asp-route-attendeeId="@Model.AttendeeId"
-      class="col-md-6">
-    <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+<div class="gk-panel gk-form mt-3" style="max-width: 560px;">
+    <form method="post"
+          asp-action="EditAttendee"
+          asp-route-eventId="@Model.EventId"
+          asp-route-attendeeId="@Model.AttendeeId">
+        <div asp-validation-summary="ModelOnly" class="text-danger mb-2"></div>
 
-    <div class="mb-3">
-        <label asp-for="Name" class="form-label"></label>
-        <input asp-for="Name" class="form-control" />
-        <span asp-validation-for="Name" class="text-danger"></span>
-    </div>
+        <div class="mb-3">
+            <label asp-for="Name" class="form-label"></label>
+            <input asp-for="Name" class="form-control" />
+            <span asp-validation-for="Name" class="text-danger"></span>
+        </div>
 
-    <div class="mb-3">
-        <label asp-for="Email" class="form-label"></label>
-        <input asp-for="Email" class="form-control" />
-        <span asp-validation-for="Email" class="text-danger"></span>
-    </div>
+        <div class="mb-3">
+            <label asp-for="Email" class="form-label"></label>
+            <input asp-for="Email" class="form-control" />
+            <span asp-validation-for="Email" class="text-danger"></span>
+        </div>
 
-    <div class="mb-3">
-        <label asp-for="ContactInfo" class="form-label"></label>
-        <input asp-for="ContactInfo" class="form-control" />
-        <span asp-validation-for="ContactInfo" class="text-danger"></span>
-    </div>
+        <div class="mb-4">
+            <label asp-for="ContactInfo" class="form-label"></label>
+            <input asp-for="ContactInfo" class="form-control" />
+            <span asp-validation-for="ContactInfo" class="text-danger"></span>
+        </div>
 
-    <button type="submit" class="btn btn-primary">Save changes</button>
-    <a asp-action="Attendees" asp-route-eventId="@Model.EventId" class="btn btn-link">Cancel</a>
-</form>
+        <div class="d-flex gap-2">
+            <button type="submit" class="btn gk-btn-coral">Save changes</button>
+            <a asp-action="Attendees" asp-route-eventId="@Model.EventId" class="btn gk-btn-soft">Cancel</a>
+        </div>
+    </form>
+</div>

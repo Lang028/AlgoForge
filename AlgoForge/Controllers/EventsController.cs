@@ -49,8 +49,22 @@ namespace AlgoForge.Controllers
 
             var events = await _db.Events
                 .Where(e => eventIds.Contains(e.Id))
-                .Include(e => e.Organisation)
                 .OrderByDescending(e => e.EventDate)
+                .Select(e => new EventCardViewModel
+                {
+                    Id = e.Id,
+                    Name = e.Name,
+                    OrganisationName = e.Organisation!.Name,
+                    EventDate = e.EventDate,
+                    Status = e.Status,
+                    CoverUrl = e.Photos
+                        .Where(p => p.Status == PhotoStatus.Visible)
+                        .OrderBy(p => p.UploadedAt)
+                        .Select(p => p.BlobUrl)
+                        .FirstOrDefault(),
+                    PhotoCount = e.Photos.Count(p => p.Status == PhotoStatus.Visible),
+                    AttendeeCount = e.Attendees.Count
+                })
                 .ToListAsync();
 
             return View(events);

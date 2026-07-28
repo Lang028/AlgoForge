@@ -4,43 +4,46 @@
     var users = ViewData["Users"] as List<AlgoForge.Models.ApplicationUser> ?? new List<AlgoForge.Models.ApplicationUser>();
 }
 
-<h2>Create organisation</h2>
-
-<div class="row">
-    <div class="col-md-6">
-        <form method="post">
-            <div asp-validation-summary="All" class="text-danger"></div>
-
-            <div class="mb-3">
-                <label asp-for="Name" class="form-label"></label>
-                <input asp-for="Name" class="form-control" />
-                <span asp-validation-for="Name" class="text-danger"></span>
-            </div>
-
-            <div class="mb-3">
-                <label asp-for="ContactEmail" class="form-label"></label>
-                <input asp-for="ContactEmail" class="form-control" />
-                <span asp-validation-for="ContactEmail" class="text-danger"></span>
-            </div>
-
-            <div class="mb-3">
-                <label asp-for="AdminUserId" class="form-label"></label>
-                <select asp-for="AdminUserId" class="form-select">
-                    <option value="">Select an admin user</option>
-                    @foreach (var user in users)
-                    {
-                        <option value="@user.Id">@user.DisplayName (@user.Email)</option>
-                    }
-                </select>
-                <span asp-validation-for="AdminUserId" class="text-danger"></span>
-            </div>
-
-            <button type="submit" class="btn btn-primary">Create organisation</button>
-        </form>
-    </div>
+<div class="gk-hero my-2">
+    <h1>Create organisation</h1>
+    <div class="crumb">Geeked On <span class="sep">&rsaquo;</span> Organisations <span class="sep">&rsaquo;</span> Create</div>
 </div>
 
-<p class="mt-3"><a asp-action="Index">Back to organisations</a></p>
+<div class="gk-panel gk-form mt-3" style="max-width: 560px;">
+    <form method="post">
+        <div asp-validation-summary="All" class="text-danger mb-2"></div>
+
+        <div class="mb-3">
+            <label asp-for="Name" class="form-label"></label>
+            <input asp-for="Name" class="form-control" placeholder="e.g. DUT App Dev" />
+            <span asp-validation-for="Name" class="text-danger"></span>
+        </div>
+
+        <div class="mb-3">
+            <label asp-for="ContactEmail" class="form-label"></label>
+            <input asp-for="ContactEmail" class="form-control" placeholder="contact@example.com" />
+            <span asp-validation-for="ContactEmail" class="text-danger"></span>
+        </div>
+
+        <div class="mb-4">
+            <label asp-for="AdminUserId" class="form-label"></label>
+            <select asp-for="AdminUserId" class="form-select">
+                <option value="">Select an admin user</option>
+                @foreach (var user in users)
+                {
+                    <option value="@user.Id">@user.DisplayName (@user.Email)</option>
+                }
+            </select>
+            <span asp-validation-for="AdminUserId" class="text-danger"></span>
+            <div class="form-text">The admin manages this organisation's details. It defaults to you.</div>
+        </div>
+
+        <div class="d-flex gap-2">
+            <button type="submit" class="btn gk-btn-coral">Create organisation</button>
+            <a asp-action="Index" class="btn gk-btn-soft">Cancel</a>
+        </div>
+    </form>
+</div>
 
 @section Scripts {
     @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}

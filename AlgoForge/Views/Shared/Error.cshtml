@@ -2,5 +2,13 @@
     ViewData["Title"] = "Error";
 }
 
-<h1 class="text-danger">Error.</h1>
-<h2 class="text-danger">An error occurred while processing your request.</h2>
+<div class="d-flex justify-content-center py-5">
+    <div class="gk-panel text-center" style="max-width: 460px;">
+        <div style="font-size: 2.5rem;">&#9888;&#65039;</div>
+        <h2 class="fw-bold mt-2" style="color:#14141c;">Something went wrong</h2>
+        <p class="text-muted" style="font-size:.9rem;">
+            An error occurred while processing your request. Try again, or head back to the dashboard.
+        </p>
+        <a class="btn gk-btn-coral mt-2" asp-controller="Home" asp-action="Index">Back to dashboard</a>
+    </div>
+</div>
