@@ -142,6 +142,168 @@ namespace AlgoForge.Controllers
             return View(attendees);
         }
 
+        // GET /Events/{eventId}/Attendees/Add
+        //
+        // Manual add for the coordinator, alongside the CSV import: a walk-in or a
+        // late addition shouldn't require re-uploading a spreadsheet.
+        [HttpGet]
+        [Route("Events/{eventId}/Attendees/Add")]
+        [RequireEventRole(EventRole.Coordinator)]
+        public async Task<IActionResult> AddAttendee(Guid eventId)
+        {
+            var evt = await _db.Events.FindAsync(eventId);
+            if (evt is null)
+            {
+                return NotFound();
+            }
+
+            return View(new AttendeeFormViewModel
+            {
+                EventId = eventId,
+                EventName = evt.Name
+            });
+        }
+
+        // POST /Events/{eventId}/Attendees/Add
+        [HttpPost]
+        [Route("Events/{eventId}/Attendees/Add")]
+        [ValidateAntiForgeryToken]
+        [RequireEventRole(EventRole.Coordinator)]
+        public async Task<IActionResult> AddAttendee(Guid eventId, AttendeeFormViewModel model)
+        {
+            var evt = await _db.Events.FindAsync(eventId);
+            if (evt is null)
+            {
+                return NotFound();
+            }
+
+            // Rule: one email per event.
+            var duplicate = await _db.Attendees.AnyAsync(a =>
+                a.EventId == eventId && a.Email == model.Email);
+            if (duplicate)
+            {
+                ModelState.AddModelError(nameof(model.Email),
+                    "An attendee with this email already exists for this event.");
+            }
+
+            if (!ModelState.IsValid)
+            {
+                model.EventId = eventId;
+                model.EventName = evt.Name;
+                return View(model);
+            }
+
+            var attendee = new Attendee
+            {
+                Id = Guid.NewGuid(),
+                EventId = eventId,
+                Name = model.Name,
+                Email = model.Email,
+                ContactInfo = model.ContactInfo,
+                InviteToken = Guid.NewGuid().ToString("N")
+            };
+
+            _db.Attendees.Add(attendee);
+            await _db.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = $"{attendee.Name} added.";
+            return RedirectToAction(nameof(Attendees), new { eventId });
+        }
+
+        // GET /Events/{eventId}/Attendees/{attendeeId}/Edit
+        [HttpGet]
+        [Route("Events/{eventId}/Attendees/{attendeeId}/Edit")]
+        [RequireEventRole(EventRole.Coordinator)]
+        public async Task<IActionResult> EditAttendee(Guid eventId, Guid attendeeId)
+        {
+            var attendee = await _db.Attendees.FirstOrDefaultAsync(
+                a => a.Id == attendeeId && a.EventId == eventId);
+            if (attendee is null)
+            {
+                return NotFound();
+            }
+
+            var evt = await _db.Events.FindAsync(eventId);
+            if (evt is null)
+            {
+                return NotFound();
+            }
+
+            return View(new AttendeeFormViewModel
+            {
+                EventId = eventId,
+                AttendeeId = attendee.Id,
+                Name = attendee.Name,
+                Email = attendee.Email,
+                ContactInfo = attendee.ContactInfo,
+                EventName = evt.Name,
+                IsClaimed = attendee.ClaimedByUserId is not null
+            });
+        }
+
+        // POST /Events/{eventId}/Attendees/{attendeeId}/Edit
+        [HttpPost]
+        [Route("Events/{eventId}/Attendees/{attendeeId}/Edit")]
+        [ValidateAntiForgeryToken]
+        [RequireEventRole(EventRole.Coordinator)]
+        public async Task<IActionResult> EditAttendee(Guid eventId, Guid attendeeId, AttendeeFormViewModel model)
+        {
+            // Identity comes from the route, never the form body, so a crafted post
+            // can't retarget another event's attendee.
+            var attendee = await _db.Attendees.FirstOrDefaultAsync(
+                a => a.Id == attendeeId && a.EventId == eventId);
+            if (attendee is null)
+            {
+                return NotFound();
+            }
+
+            // Rule: one email per event, excluding this attendee's own row.
+            var duplicate = await _db.Attendees.AnyAsync(a =>
+                a.EventId == eventId && a.Id != attendeeId && a.Email == model.Email);
+            if (duplicate)
+            {
+                ModelState.AddModelError(nameof(model.Email),
+                    "An attendee with this email already exists for this event.");
+            }
+
+            if (!ModelState.IsValid)
+            {
+                var evt = await _db.Events.FindAsync(eventId);
+                model.EventId = eventId;
+                model.AttendeeId = attendeeId;
+                model.EventName = evt?.Name ?? string.Empty;
+                model.IsClaimed = attendee.ClaimedByUserId is not null;
+                return View(model);
+            }
+
+            bool emailChanged = !string.Equals(attendee.Email, model.Email, StringComparison.OrdinalIgnoreCase);
+            bool wasUnclaimed = attendee.ClaimedByUserId is null;
+
+            // Assign onto the tracked row -- never attach a form-built Attendee, or a
+            // crafted post could overwrite InviteToken, ClaimedByUserId, or ContactsVisible.
+            attendee.Name = model.Name;
+            attendee.Email = model.Email;
+            attendee.ContactInfo = model.ContactInfo;
+
+            // Rule: an unclaimed attendee's invite token is only as trustworthy as the
+            // email it was sent to, so a changed email invalidates the old link. Once
+            // claimed, the token is spent and there is nothing to rotate.
+            bool tokenRegenerated = false;
+            if (wasUnclaimed && emailChanged)
+            {
+                attendee.InviteToken = Guid.NewGuid().ToString("N");
+                tokenRegenerated = true;
+            }
+
+            await _db.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = tokenRegenerated
+                ? $"{attendee.Name} updated. Their email changed, so a new invite link was generated."
+                : $"{attendee.Name} updated.";
+
+            return RedirectToAction(nameof(Attendees), new { eventId });
+        }
+
         // Sends (logs, in dev mode -- see NoOpEmailSender) the claim link for one attendee
         // and surfaces it in TempData too, so the demo doesn't depend on reading server logs.
         [HttpPost]
