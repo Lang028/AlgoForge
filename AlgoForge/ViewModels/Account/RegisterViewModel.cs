@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using AlgoForge.Models;
 
 namespace AlgoForge.ViewModels.Account
 {
@@ -12,9 +13,30 @@ namespace AlgoForge.ViewModels.Account
     // a way to hand yourself the keys to someone else's event.
     public class RegisterViewModel
     {
-        [Required]
+        // Which of the two staff roles the person is signing up as. This still grants
+        // nothing: it is stored as the ActiveRole claim so the dashboard and navigation
+        // open on the right thing, and access continues to come only from EventMembership.
+        //
+        // Only Coordinator and Photographer are offered. Attendees and delegates never
+        // register their way in -- they arrive through an emailed invite link.
+        [Required(ErrorMessage = "Choose whether you're signing up as an organisation or a photographer.")]
+        [Display(Name = "I'm signing up as")]
+        public EventRole? SignUpAs { get; set; }
+
+        // For a photographer this is their own name. For an organisation it is the
+        // organisation's name -- that is what appears on their events, so asking for a
+        // personal name and then never using it would be pointless. Validated in the
+        // controller, which knows which of the two was chosen.
         [Display(Name = "Full name")]
         public string DisplayName { get; set; } = string.Empty;
+
+        /// <summary>Only used when signing up as an organisation.</summary>
+        [Display(Name = "Organisation name")]
+        public string? OrganisationName { get; set; }
+
+        /// <summary>Where people should reach the organisation; defaults to the sign-up email.</summary>
+        [Display(Name = "Organisation contact email")]
+        public string? OrganisationContactEmail { get; set; }
 
         [Required]
         [EmailAddress]

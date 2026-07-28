@@ -110,7 +110,7 @@ namespace AlgoForge.Controllers
                     .Select(e => new EventOverviewRow
                     {
                         Name = e.Name,
-                        OrganisationName = e.Organisation!.Name,
+                        OrganisationName = e.Organisation != null ? e.Organisation.Name : "—",
                         EventDate = e.EventDate,
                         Status = e.Status,
                         PhotoCount = e.Photos.Count,

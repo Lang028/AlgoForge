@@ -64,7 +64,7 @@ namespace AlgoForge.Controllers
 
                 var orgIds = myOrganisations.Select(o => o.Id).ToList();
                 eventIds = await _db.Events
-                    .Where(e => orgIds.Contains(e.OrganisationId))
+                    .Where(e => e.OrganisationId != null && orgIds.Contains(e.OrganisationId.Value))
                     .Select(e => e.Id)
                     .ToListAsync();
             }

@@ -54,18 +54,25 @@ namespace AlgoForge.Controllers
                 {
                     Id = e.Id,
                     Name = e.Name,
-                    OrganisationName = e.Organisation!.Name,
+                    OrganisationName = e.Organisation != null ? e.Organisation.Name : null,
                     EventDate = e.EventDate,
                     Status = e.Status,
-                    CoverUrl = e.Photos
+                    CoverPhotoId = e.Photos
                         .Where(p => p.Status == PhotoStatus.Visible)
                         .OrderBy(p => p.UploadedAt)
-                        .Select(p => p.BlobUrl)
+                        .Select(p => (Guid?)p.Id)
                         .FirstOrDefault(),
                     PhotoCount = e.Photos.Count(p => p.Status == PhotoStatus.Visible),
                     AttendeeCount = e.Attendees.Count
                 })
                 .ToListAsync();
+
+            // Covers are served through the authorising Photos/File action rather than a
+            // public /uploads URL, so the link is built once the rows are materialised.
+            foreach (var card in events.Where(c => c.CoverPhotoId is not null))
+            {
+                card.CoverUrl = Url.Action("File", "Photos", new { id = card.CoverPhotoId });
+            }
 
             return View(events);
         }
@@ -73,9 +80,36 @@ namespace AlgoForge.Controllers
         [HttpGet]
         public async Task<IActionResult> Create()
         {
-            ViewData["Organisations"] = await _db.Organisations.OrderBy(o => o.Name).ToListAsync();
+            if (IsSystemAdmin)
+            {
+                return Forbid();
+            }
+
+            // Only organisations this user actually administers. You never file your event
+            // under someone else's organisation by picking it from a list -- an organisation
+            // takes an event on by accepting a handover invite.
+            ViewData["Organisations"] = await MyOrganisationsAsync();
             return View(new CreateEventViewModel());
         }
+
+        private async Task<List<Organisation>> MyOrganisationsAsync()
+        {
+            var userIdText = _userManager.GetUserId(User);
+            if (userIdText is null || !Guid.TryParse(userIdText, out var userId))
+            {
+                return new List<Organisation>();
+            }
+
+            return await _db.Organisations
+                .Where(o => o.AdminUserId == userId)
+                .OrderBy(o => o.Name)
+                .ToListAsync();
+        }
+
+        // The platform admin holds no EventMemberships, which is what keeps event content
+        // (attendee lists, galleries, tags) out of their reach. Creating an event would
+        // hand them Coordinator on it and undo exactly that, so this door is shut for them.
+        private bool IsSystemAdmin => User.IsInRole(DbInitializer.SystemAdminRole);
 
         // Creating an event grants the creator BOTH memberships, Coordinator and
         // Photographer.
@@ -89,6 +123,11 @@ namespace AlgoForge.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Create(CreateEventViewModel model)
         {
+            if (IsSystemAdmin)
+            {
+                return Forbid();
+            }
+
             if (!ModelState.IsValid)
             {
                 ViewData["Organisations"] = await _db.Organisations.OrderBy(o => o.Name).ToListAsync();
@@ -101,12 +140,33 @@ namespace AlgoForge.Controllers
                 return Challenge();
             }
 
+            // An organisation is optional. Left empty the event stands on its own and the
+            // creator runs it outright via the two memberships granted below -- which is
+            // exactly what a photographer shooting a small private job needs. They can hand
+            // it to an organisation later without losing their own access.
+            Guid? organisationId = null;
+            if (model.OrganisationId is Guid chosen && chosen != Guid.Empty)
+            {
+                var administersIt = await _db.Organisations
+                    .AnyAsync(o => o.Id == chosen && o.AdminUserId == userId);
+
+                if (!administersIt)
+                {
+                    ModelState.AddModelError(nameof(model.OrganisationId),
+                        "You can only file an event under an organisation you administer.");
+                    ViewData["Organisations"] = await MyOrganisationsAsync();
+                    return View(model);
+                }
+
+                organisationId = chosen;
+            }
+
             var evt = new Event
             {
                 Id = Guid.NewGuid(),
                 Name = model.Name,
                 EventDate = model.EventDate,
-                OrganisationId = model.OrganisationId,
+                OrganisationId = organisationId,
                 TagConfirmationRequired = model.TagConfirmationRequired,
                 Status = EventStatus.Draft
             };
@@ -336,7 +396,9 @@ namespace AlgoForge.Controllers
             await _emailSender.SendEmailAsync(attendee.Email, "You're tagged in photos from the event",
                 $"Claim your photos and review your tags: {claimUrl}");
 
-            TempData["SuccessMessage"] = $"Invite sent to {attendee.Name}. Claim link (dev mode, not actually emailed): {claimUrl}";
+            TempData["SuccessMessage"] =
+                $"Invite emailed to {attendee.Name}. In demo mode it lands in the Outbox; " +
+                $"the claim link is {claimUrl}";
             return RedirectToAction(nameof(Attendees), new { eventId });
         }
 

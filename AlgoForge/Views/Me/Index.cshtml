@@ -1,0 +1,168 @@
+@using System.Globalization
+@model AlgoForge.Models.Attendee
+@{
+    ViewData["Title"] = "My details";
+    var eventId = (Guid)ViewData["EventId"]!;
+    var eventName = (string)ViewData["EventName"]!;
+    var unclaimed = ViewData["Unclaimed"] as List<AlgoForge.Models.PersonCluster> ?? new();
+
+    string Pct(double value) => (value * 100).ToString(CultureInfo.InvariantCulture);
+
+    AlgoForge.Models.PersonDetection? CoverOf(AlgoForge.Models.PersonCluster cluster) =>
+        cluster.Detections.FirstOrDefault(d => d.Id == cluster.AnchorDetectionId && d.Photo is not null)
+        ?? cluster.Detections.Where(d => d.Photo is not null)
+                             .OrderByDescending(d => d.ProminenceScore)
+                             .FirstOrDefault();
+}
+
+<style>
+    .face-card {
+        width: 220px;
+        background: #fff;
+        border-radius: 16px;
+        overflow: hidden;
+        box-shadow: 0 6px 18px rgba(20, 20, 28, .08);
+    }
+
+    .face-photo { position: relative; line-height: 0; }
+    .face-photo img { width: 100%; display: block; }
+
+    .face-box {
+        position: absolute;
+        border: 2px solid #7c5cfc;
+        border-radius: 4px;
+        box-sizing: border-box;
+    }
+
+    .face-card .body { padding: .8rem .9rem 1rem; }
+</style>
+
+<div class="gk-hero my-2">
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+        <div>
+            <h1>My details</h1>
+            <div class="crumb">Geeked On <span class="sep">&rsaquo;</span> @eventName <span class="sep">&rsaquo;</span> Me</div>
+            <p class="hero-sub">
+                How you appear to other guests at this event, and the photographs you're in.
+            </p>
+        </div>
+        <a asp-controller="Photos" asp-action="Index" asp-route-eventId="@eventId" class="btn gk-btn-soft">
+            Back to gallery
+        </a>
+    </div>
+</div>
+
+@if (TempData["SuccessMessage"] is string ok)
+{
+    <div class="alert alert-success mt-3">@ok</div>
+}
+@if (TempData["ErrorMessage"] is string err)
+{
+    <div class="alert alert-danger mt-3">@err</div>
+}
+
+<div class="gk-panel mt-3">
+    <h2 style="font-size:1.05rem; font-weight:700; color: var(--gk-ink);">Your details</h2>
+
+    <form method="post" asp-action="Profile" asp-route-eventId="@eventId">
+        @Html.AntiForgeryToken()
+
+        <div class="row">
+            <div class="col-md-6 mb-3">
+                <label class="form-label fw-semibold">Name</label>
+                <input name="name" class="form-control" value="@Model.Name" required />
+            </div>
+
+            <div class="col-md-6 mb-3">
+                <label class="form-label fw-semibold">Email</label>
+                <input class="form-control" value="@Model.Email" disabled />
+                <div class="form-text">
+                    This is where your invite was sent, so it can't be changed here.
+                </div>
+            </div>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label fw-semibold">About you</label>
+            <textarea name="about" class="form-control" rows="3"
+                      placeholder="What you do, where you work, why you were there.">@Model.About</textarea>
+            <div class="form-text">
+                Shown to other guests at this event next to your name. Keep it to what
+                you're happy for them to see &mdash; it isn't a way to contact you.
+            </div>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label fw-semibold">Contact details</label>
+            <input name="contactInfo" class="form-control" value="@Model.ContactInfo"
+                   placeholder="Phone, handle, or anything else you'd share" />
+            <div class="form-text">
+                Kept private until you accept a connection request, unless you tick the box below.
+            </div>
+        </div>
+
+        <div class="form-check mb-4">
+            <input class="form-check-input" type="checkbox" name="contactsVisible" value="true"
+                   id="contactsVisible" @(Model.ContactsVisible ? "checked" : "") />
+            <label class="form-check-label" for="contactsVisible">
+                Let anyone at this event see my contact details without connecting first
+            </label>
+        </div>
+
+        <button type="submit" class="btn gk-btn-coral">Save my details</button>
+    </form>
+</div>
+
+<div class="gk-panel mt-3">
+    <h2 style="font-size:1.05rem; font-weight:700; color: var(--gk-ink);">Recognise yourself</h2>
+
+    @if (!unclaimed.Any())
+    {
+        <p class="text-muted mb-0">
+            Nobody is waiting to be identified in this event's photos right now.
+        </p>
+    }
+    else
+    {
+        <p class="text-muted" style="max-width:64ch;">
+            These are groups of photos showing the same person, who nobody has named yet.
+            If one of them is you, say so and you'll be tagged in all of them &mdash; no
+            approval needed, because you're naming yourself.
+        </p>
+
+        <div class="d-flex flex-wrap gap-3">
+            @foreach (var cluster in unclaimed)
+            {
+                var cover = CoverOf(cluster);
+                if (cover?.Photo is null)
+                {
+                    continue;
+                }
+
+                var photoCount = cluster.Detections.Select(d => d.PhotoId).Distinct().Count();
+
+                <div class="face-card">
+                    <div class="face-photo">
+                        <img src="@Url.Action("File", "Photos", new { id = cover.Photo.Id })" alt="Unidentified face" />
+                        <div class="face-box"
+                             style="left:@Pct(cover.FaceX ?? cover.BoxX)%; top:@Pct(cover.FaceY ?? cover.BoxY)%; width:@Pct(cover.FaceWidth ?? cover.BoxWidth)%; height:@Pct(cover.FaceHeight ?? cover.BoxHeight)%;"></div>
+                    </div>
+
+                    <div class="body">
+                        <p class="mb-2 text-muted" style="font-size:.82rem;">
+                            In @photoCount photo@(photoCount == 1 ? "" : "s")
+                        </p>
+
+                        <form method="post" asp-action="ThisIsMe" asp-route-eventId="@eventId">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="clusterId" value="@cluster.Id" />
+                            <button type="submit" class="btn gk-btn-coral gk-btn-sm w-100">
+                                This is me
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>

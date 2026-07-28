@@ -1,7 +1,7 @@
 @using AlgoForge.ViewModels.Photos
 @model GalleryViewModel
 @{
-    ViewData["Title"] = Model.EventName + " — Gallery";
+    ViewData["Title"] = Model.EventName + " â€” Gallery";
 
     // Only what the viewer is allowed to know reaches the browser: the controller has already
     // stripped contact details for anyone they aren't connected to (D11).
@@ -24,6 +24,7 @@
                 connectionId = f.ConnectionId,
                 email = f.ContactEmail,
                 contact = f.ContactInfo,
+                about = f.About,
                 optIn = f.ContactsSharedByOptIn
             })
         })
@@ -38,7 +39,7 @@
         --line: #2e2a24;
         --ink: #f2ede5;
         --ink-dim: #a39a8c;
-        --accent: #c8442e;
+        --accent: #7c5cfc;
 
         background: var(--surface);
         color: var(--ink);
@@ -86,7 +87,7 @@
     }
     .g-btn:hover { border-color: var(--ink-dim); color: var(--ink); background: var(--surface-raised); }
     .g-btn--accent { background: var(--accent); border-color: var(--accent); color: #fff; }
-    .g-btn--accent:hover { background: #b13a27; border-color: #b13a27; color: #fff; }
+    .g-btn--accent:hover { background: #5b3fd6; border-color: #5b3fd6; color: #fff; }
 
     .gallery-grid { columns: 4; column-gap: 10px; }
     @@media (max-width: 1200px) { .gallery-grid { columns: 3; } }
@@ -118,6 +119,48 @@
         transition: opacity 0.15s;
     }
     .tile:hover .tile-badge { opacity: 1; }
+
+    /* Per-photo controls. Kept out of the way until the tile is hovered, and always
+       available on touch, where there is no hover to reveal them. */
+    .tile-tools {
+        position: absolute;
+        top: 0.4rem;
+        right: 0.4rem;
+        display: flex;
+        gap: 0.3rem;
+        opacity: 0;
+        transition: opacity 0.15s;
+        line-height: 1;
+    }
+
+    .tile:hover .tile-tools,
+    .tile:focus-within .tile-tools { opacity: 1; }
+
+    @@media (hover: none) {
+        .tile-tools { opacity: 1; }
+    }
+
+    .tile-tools form { display: inline; margin: 0; }
+
+    .tile-tool {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        border: 0;
+        border-radius: 50%;
+        background: rgba(20, 18, 15, 0.82);
+        color: var(--ink);
+        font-size: 0.95rem;
+        text-decoration: none;
+        cursor: pointer;
+        padding: 0;
+        transition: background 0.15s, color 0.15s;
+    }
+
+    .tile-tool:hover { background: var(--accent); color: #fff; }
+    .tile-tool--danger:hover { background: #b42318; color: #fff; }
 
     .tile-status {
         position: absolute;
@@ -154,7 +197,7 @@
         cursor: pointer;
         transition: border-color 0.15s;
     }
-    .lb-face:hover, .lb-face.active { border-color: var(--lb-accent, #c8442e); border-width: 2px; }
+    .lb-face:hover, .lb-face.active { border-color: var(--lb-accent, #7c5cfc); border-width: 2px; }
     .lb-face span {
         position: absolute;
         top: 100%;
@@ -224,10 +267,21 @@
             </p>
         </div>
         <div class="gallery-actions">
-            <a class="g-btn" asp-controller="Connections" asp-action="Index">My connections</a>
-            <a class="g-btn" asp-controller="Tags" asp-action="Index" asp-route-eventId="@Model.EventId">My tags</a>
-            <a class="g-btn" asp-controller="Clusters" asp-action="Index" asp-route-eventId="@Model.EventId">Identify people</a>
-            <a class="g-btn g-btn--accent" asp-action="Upload" asp-route-eventId="@Model.EventId">Upload photos</a>
+            @if (Model.IsAttendee)
+            {
+                <a class="g-btn" asp-controller="Me" asp-action="Index" asp-route-eventId="@Model.EventId">My details</a>
+                <a class="g-btn" asp-controller="Tags" asp-action="Index" asp-route-eventId="@Model.EventId">My tags</a>
+                <a class="g-btn" asp-controller="Delegates" asp-action="Index" asp-route-eventId="@Model.EventId">My delegates</a>
+                <a class="g-btn" asp-controller="Connections" asp-action="Index">My connections</a>
+            }
+            @if (Model.CanIdentify)
+            {
+                <a class="g-btn" asp-controller="Clusters" asp-action="Index" asp-route-eventId="@Model.EventId">Identify people</a>
+            }
+            @if (Model.CanUpload)
+            {
+                <a class="g-btn g-btn--accent" asp-action="Upload" asp-route-eventId="@Model.EventId">Upload photos</a>
+            }
         </div>
     </div>
 
@@ -243,10 +297,34 @@
                 var photo = Model.Photos[i];
                 <figure class="tile" data-index="@i">
                     <img src="@photo.Url" alt="Event photo" loading="lazy" />
+
                     @if (photo.Faces.Any())
                     {
                         <figcaption class="tile-badge">@string.Join(", ", photo.Faces.Select(f => f.Name))</figcaption>
                     }
+
+                    @* Stops the click bubbling to the tile, which opens the lightbox. *@
+                    <div class="tile-tools" onclick="event.stopPropagation();">
+                        <a class="tile-tool"
+                           href="@photo.DownloadUrl"
+                           download
+                           title="Download this photo"
+                           aria-label="Download this photo">&#8595;</a>
+
+                        @if (Model.CanDelete)
+                        {
+                            <form method="post"
+                                  asp-action="Delete"
+                                  asp-route-id="@photo.Id"
+                                  onsubmit="return confirm('Remove this photo from the gallery? Attendees will no longer see it.');">
+                                @Html.AntiForgeryToken()
+                                <button type="submit"
+                                        class="tile-tool tile-tool--danger"
+                                        title="Remove this photo"
+                                        aria-label="Remove this photo">&times;</button>
+                            </form>
+                        }
+                    </div>
                 </figure>
             }
         </div>
@@ -356,7 +434,13 @@
                 ? '<p class="muted">Shared openly with event members by their own choice.</p>'
                 : '';
 
-            return `<h3>${name}</h3>${sub}${body}`;
+            // What they say they do. Written by them and shown to every member, so it sits
+            // above the connection state rather than inside the contact block.
+            const about = face.about
+                ? `<p style="margin:.35rem 0 0;">${escape(face.about)}</p>`
+                : '';
+
+            return `<h3>${name}</h3>${about}${sub}${body}`;
         };
 
         const emptyPanel = (photo) => {

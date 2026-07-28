@@ -26,7 +26,10 @@ builder.Services.AddControllersWithViews();
 builder.Services.AddScoped<AttendeeImportService>();
 builder.Services.AddScoped<AlgoForge.Services.Authorization.IEventAccessService,
                            AlgoForge.Services.Authorization.EventAccessService>();
-builder.Services.AddScoped<AlgoForge.Services.IEmailSender, AlgoForge.Services.NoOpEmailSender>();
+// Demo/dev: email is written to App_Data/outbox and listed on the Outbox page, so invite,
+// claim and connection links are clickable during a presentation. NoOpEmailSender only
+// logged them, which is no use mid-demo. Point this at a real provider before deploying.
+builder.Services.AddScoped<AlgoForge.Services.IEmailSender, AlgoForge.Services.OutboxEmailSender>();
 
 builder.Services.AddHttpClient<PersonPipelineService>(client =>
 {
@@ -90,15 +93,14 @@ app.UseStaticFiles();
 
 // Uploaded photos live in App_Data/uploads, outside wwwroot, so that dev-time file
 // watchers (dotnet watch, Visual Studio hot reload) don't treat every upload as a source
-// change and restart or refresh the app mid-upload. This provider serves them at the
-// same /uploads URLs the Photo.BlobUrl column has always used.
+// change and restart or refresh the app mid-upload.
+//
+// They are deliberately NOT mapped to a static-file route. A provider on /uploads served
+// every private event's pictures to anyone holding the URL, with no account and no
+// membership check -- events are private by default, so the bytes go through
+// PhotosController.File, which checks membership of the photo's event on every request.
 var uploadsRoot = Path.Combine(app.Environment.ContentRootPath, "App_Data", "uploads");
 Directory.CreateDirectory(uploadsRoot);
-app.UseStaticFiles(new StaticFileOptions
-{
-    FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(uploadsRoot),
-    RequestPath = "/uploads"
-});
 
 app.UseRouting();
 

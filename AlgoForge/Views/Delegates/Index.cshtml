@@ -1,0 +1,125 @@
+@model IEnumerable<AlgoForge.Models.DelegateInvite>
+@{
+    var eventId = (Guid)ViewData["EventId"]!;
+    var eventName = (string)ViewData["EventName"]!;
+    var max = (int)ViewData["MaxPerAttendee"]!;
+    var used = Model.Count();
+    ViewData["Title"] = "My delegates";
+}
+
+<div class="gk-hero my-2">
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+        <div>
+            <h1>My delegates</h1>
+            <div class="crumb">Geeked On <span class="sep">&rsaquo;</span> @eventName <span class="sep">&rsaquo;</span> Delegates</div>
+        </div>
+        <a asp-controller="Photos" asp-action="Index" asp-route-eventId="@eventId" class="btn gk-btn-soft">
+            Back to gallery
+        </a>
+    </div>
+</div>
+
+<p class="text-muted mt-3" style="max-width: 62ch;">
+    People you trust to view this gallery on your behalf. They can look and download.
+    They cannot confirm tags or answer connection requests &mdash; those stay yours.
+</p>
+
+@if (TempData["SuccessMessage"] is string ok)
+{
+    <div class="alert alert-success">@ok</div>
+}
+@if (TempData["ErrorMessage"] is string err)
+{
+    <div class="alert alert-danger">@err</div>
+}
+
+<div class="gk-panel mb-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 style="font-size: 1.05rem; font-weight: 700; color: var(--gk-ink); margin: 0;">
+            Nominated
+        </h2>
+        <span class="gk-pill @(used >= max ? "coral" : "violet")">@used of @max used</span>
+    </div>
+
+    @if (!Model.Any())
+    {
+        <p class="text-muted mb-0">
+            You haven't nominated anyone yet.
+        </p>
+    }
+    else
+    {
+        <table class="gk-table mb-0">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>Status</th>
+                    <th class="text-end">Access</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var invite in Model)
+                {
+                    <tr>
+                        <td><strong>@invite.Name</strong></td>
+                        <td class="text-muted">@invite.Email</td>
+                        <td>
+                            @if (invite.ClaimedByUserId is not null)
+                            {
+                                <span class="gk-pill violet">ACTIVE</span>
+                            }
+                            else
+                            {
+                                <span class="gk-pill">INVITED</span>
+                            }
+                        </td>
+                        <td class="text-end">
+                            <form method="post"
+                                  asp-action="Revoke"
+                                  asp-route-eventId="@eventId"
+                                  asp-route-inviteId="@invite.Id">
+                                @Html.AntiForgeryToken()
+                                <button type="submit" class="btn gk-btn-danger gk-btn-sm">Revoke</button>
+                            </form>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>
+
+@if (used < max)
+{
+    <div class="gk-panel">
+        <h2 style="font-size: 1.05rem; font-weight: 700; color: var(--gk-ink);">
+            Nominate someone
+        </h2>
+        <p class="text-muted" style="font-size: .9rem;">
+            They'll get an email with a private link. You can revoke it at any time.
+        </p>
+
+        <form method="post" asp-action="Invite" asp-route-eventId="@eventId" class="row g-2">
+            @Html.AntiForgeryToken()
+
+            <div class="col-md-4">
+                <input name="name" class="form-control" placeholder="Their name" required />
+            </div>
+            <div class="col-md-5">
+                <input name="email" type="email" class="form-control" placeholder="Their email" required />
+            </div>
+            <div class="col-md-3">
+                <button type="submit" class="btn gk-btn-coral w-100">Send invite</button>
+            </div>
+        </form>
+    </div>
+}
+else
+{
+    <div class="gk-panel">
+        <p class="text-muted mb-0">
+            You've used all @max delegate places. Revoke one above to nominate someone else.
+        </p>
+    </div>
+}

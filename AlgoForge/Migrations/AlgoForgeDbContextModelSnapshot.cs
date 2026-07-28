@@ -125,6 +125,10 @@ namespace AlgoForge.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("About")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<Guid?>("ClaimedByUserId")
                         .HasColumnType("uniqueidentifier");
 
@@ -212,6 +216,53 @@ namespace AlgoForge.Migrations
                     b.ToTable("Connections");
                 });
 
+            modelBuilder.Entity("AlgoForge.Models.DelegateInvite", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("AttendeeId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("ClaimedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("EventId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("GrantedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("Revoked")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Token")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AttendeeId");
+
+                    b.HasIndex("ClaimedByUserId");
+
+                    b.HasIndex("EventId");
+
+                    b.ToTable("DelegateInvites");
+                });
+
             modelBuilder.Entity("AlgoForge.Models.Event", b =>
                 {
                     b.Property<Guid>("Id")
@@ -225,7 +276,7 @@ namespace AlgoForge.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<Guid>("OrganisationId")
+                    b.Property<Guid?>("OrganisationId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<int>("Status")
@@ -295,6 +346,45 @@ namespace AlgoForge.Migrations
                     b.HasIndex("AdminUserId");
 
                     b.ToTable("Organisations");
+                });
+
+            modelBuilder.Entity("AlgoForge.Models.OrganisationHandover", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("AcceptedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("CreatedOrganisationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("EventId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("InvitedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("Revoked")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Token")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EventId");
+
+                    b.ToTable("OrganisationHandovers");
                 });
 
             modelBuilder.Entity("AlgoForge.Models.PersonCluster", b =>
@@ -667,13 +757,38 @@ namespace AlgoForge.Migrations
                     b.Navigation("Requester");
                 });
 
+            modelBuilder.Entity("AlgoForge.Models.DelegateInvite", b =>
+                {
+                    b.HasOne("AlgoForge.Models.Attendee", "Attendee")
+                        .WithMany()
+                        .HasForeignKey("AttendeeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("AlgoForge.Models.ApplicationUser", "ClaimedByUser")
+                        .WithMany()
+                        .HasForeignKey("ClaimedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("AlgoForge.Models.Event", "Event")
+                        .WithMany()
+                        .HasForeignKey("EventId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Attendee");
+
+                    b.Navigation("ClaimedByUser");
+
+                    b.Navigation("Event");
+                });
+
             modelBuilder.Entity("AlgoForge.Models.Event", b =>
                 {
                     b.HasOne("AlgoForge.Models.Organisation", "Organisation")
                         .WithMany("Events")
                         .HasForeignKey("OrganisationId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("Organisation");
                 });
@@ -713,6 +828,17 @@ namespace AlgoForge.Migrations
                         .IsRequired();
 
                     b.Navigation("AdminUser");
+                });
+
+            modelBuilder.Entity("AlgoForge.Models.OrganisationHandover", b =>
+                {
+                    b.HasOne("AlgoForge.Models.Event", "Event")
+                        .WithMany()
+                        .HasForeignKey("EventId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Event");
                 });
 
             modelBuilder.Entity("AlgoForge.Models.PersonCluster", b =>

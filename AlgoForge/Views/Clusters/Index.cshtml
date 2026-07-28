@@ -30,7 +30,7 @@
 
     .cluster-face-box {
         position: absolute;
-        border: 2px solid #f4502a;
+        border: 2px solid #7c5cfc;
         border-radius: 4px;
         box-sizing: border-box;
     }
@@ -38,7 +38,7 @@
     .cluster-card .body { padding: 1rem 1.1rem 1.2rem; }
 
     .shaky {
-        border-left: 3px solid #f4502a;
+        border-left: 3px solid #7c5cfc;
         padding-left: .5rem;
     }
 
@@ -51,12 +51,12 @@
 
     .cluster-card .form-select:focus {
         background: #fff;
-        border-color: #f4502a;
+        border-color: #7c5cfc;
         box-shadow: none;
     }
 
     .cluster-card .btn-identify {
-        background: #f4502a;
+        background: #7c5cfc;
         color: #fff;
         border: 0;
         border-radius: 0 12px 12px 0;
@@ -64,7 +64,7 @@
         font-size: .85rem;
     }
 
-    .cluster-card .btn-identify:hover { background: #d84523; color: #fff; }
+    .cluster-card .btn-identify:hover { background: #5b3fd6; color: #fff; }
 </style>
 
 <div class="gk-hero my-2">
@@ -116,7 +116,7 @@ else
                 @if (cover?.Photo is not null)
                 {
                     <div class="cluster-photo">
-                        <img src="@cover.Photo.BlobUrl" alt="Representative photo" />
+                        <img src="@Url.Action("File", "Photos", new { id = cover.Photo.Id })" alt="Representative photo" />
                         <div class="cluster-face-box"
                              style="left: @Pct(cover.FaceX ?? cover.BoxX)%; top: @Pct(cover.FaceY ?? cover.BoxY)%; width: @Pct(cover.FaceWidth ?? cover.BoxWidth)%; height: @Pct(cover.FaceHeight ?? cover.BoxHeight)%;"></div>
                     </div>

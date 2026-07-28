@@ -5,16 +5,30 @@
 @inject UserManager<AlgoForge.Models.ApplicationUser> UserManager
 @{
     var currentUserRoles = new List<string>();
+
+    // The platform admin monitors the system and never participates in events, so the
+    // event-side navigation is not offered to them at all.
+    var isSystemAdmin = User.IsInRole(AlgoForge.Data.DbInitializer.SystemAdminRole);
+
+    // Connecting is an attendee concern -- see ConnectionsController.Index.
+    var isAttendee = false;
+
     if (User.Identity?.IsAuthenticated ?? false)
     {
         var currentUserId = UserManager.GetUserId(User);
         if (currentUserId is not null && Guid.TryParse(currentUserId, out var currentUserGuid))
         {
-            currentUserRoles = await Db.EventMemberships
+            var memberships = await Db.EventMemberships
                 .Where(m => m.UserId == currentUserGuid)
                 .Include(m => m.Event)
-                .Select(m => $"{m.Role} @ {m.Event!.Name}")
+                .Select(m => new { m.Role, EventName = m.Event!.Name })
                 .ToListAsync();
+
+            currentUserRoles = memberships
+                .Select(m => $"{m.Role} @ {m.EventName}")
+                .ToList();
+
+            isAttendee = memberships.Any(m => m.Role == AlgoForge.Models.EventRole.Attendee);
         }
     }
 }
@@ -40,10 +54,20 @@
                     <li class="nav-item"><a class="nav-link" asp-controller="Home" asp-action="Index">Home</a></li>
                     <li class="nav-item"><a class="nav-link" asp-controller="Home" asp-action="About">About</a></li>
                     <li class="nav-item"><a class="nav-link" asp-controller="Home" asp-action="Contact">Contact</a></li>
-                    <li class="nav-item"><a class="nav-link" asp-controller="Events" asp-action="Index">Events</a></li>
-                    @if (User.Identity?.IsAuthenticated ?? false)
+
+                    @if (isSystemAdmin)
                     {
-                        <li class="nav-item"><a class="nav-link" asp-controller="Connections" asp-action="Index">Connections</a></li>
+                        <li class="nav-item"><a class="nav-link" asp-controller="Admin" asp-action="Index">Admin console</a></li>
+                        <li class="nav-item"><a class="nav-link" asp-controller="Outbox" asp-action="Index">Outbox</a></li>
+                    }
+                    else
+                    {
+                        <li class="nav-item"><a class="nav-link" asp-controller="Events" asp-action="Index">Events</a></li>
+
+                        @if (isAttendee)
+                        {
+                            <li class="nav-item"><a class="nav-link" asp-controller="Connections" asp-action="Index">Connections</a></li>
+                        }
                     }
                 </ul>
                 @if (User.Identity?.IsAuthenticated ?? false)

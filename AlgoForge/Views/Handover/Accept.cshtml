@@ -1,0 +1,48 @@
+@{
+    ViewData["Title"] = "Take on this event";
+    var token = (string)ViewData["Token"]!;
+    var eventName = ViewData["EventName"] as string;
+    var suggestedEmail = ViewData["SuggestedEmail"] as string;
+}
+
+<div class="d-flex justify-content-center py-5">
+    <div class="gk-panel" style="max-width: 560px; width: 100%;">
+
+        <h1 style="font-size:1.4rem; font-weight:800; color: var(--gk-ink);">
+            Take on @eventName
+        </h1>
+
+        <p class="text-muted">
+            Set your organisation up and this event moves under it. You'll manage its
+            attendees, tagging and settings from then on. The photographer keeps access to
+            the photographs they took.
+        </p>
+
+        @if (TempData["ErrorMessage"] is string err)
+        {
+            <div class="alert alert-danger">@err</div>
+        }
+
+        <form method="post" asp-action="Accept" asp-route-token="@token">
+            @Html.AntiForgeryToken()
+
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Organisation name</label>
+                <input name="organisationName" class="form-control"
+                       placeholder="e.g. Durban Events Co" required />
+            </div>
+
+            <div class="mb-4">
+                <label class="form-label fw-semibold">Contact email</label>
+                <input name="contactEmail" type="email" class="form-control"
+                       value="@suggestedEmail" />
+                <div class="form-text">Where people should reach your organisation.</div>
+            </div>
+
+            <button type="submit" class="btn gk-btn-coral w-100">
+                Create organisation &amp; take on event
+            </button>
+        </form>
+
+    </div>
+</div>

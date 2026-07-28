@@ -1,11 +1,23 @@
 /* Geeked On design system — shared across every page.
-   Palette: coral #f4502a, violet #7c5cfc, ink #14141c, page bg #e9eaee. */
+   Palette: violet #7c5cfc, teal #0f9d8f, ink #14141c, page bg #e9eaee.
+   Flat colours only — no gradients. */
 
 :root {
-    --gk-coral: #f4502a;
-    --gk-coral-dark: #d84523;
-    --gk-coral-soft: #fef1ec;
-    --gk-violet: #7c5cfc;
+    /* Accent: violet. */
+    --gk-accent: #7c5cfc;
+    --gk-accent-dark: #5b3fd6;
+    --gk-accent-soft: #f0edff;
+
+    /* Second status colour, so pills stay distinguishable from the accent. */
+    --gk-accent-2: #0f9d8f;
+
+    /* The coral/orange has been retired. These names are kept as aliases because
+       existing rules and views still refer to them; they resolve to the violet above. */
+    --gk-coral: var(--gk-accent);
+    --gk-coral-dark: var(--gk-accent-dark);
+    --gk-coral-soft: var(--gk-accent-soft);
+    --gk-violet: var(--gk-accent-2);
+
     --gk-ink: #14141c;
     --gk-bg: #e9eaee;
     --gk-muted: #6b7280;

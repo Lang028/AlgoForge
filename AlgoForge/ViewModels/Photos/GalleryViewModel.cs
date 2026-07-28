@@ -43,6 +43,11 @@ namespace AlgoForge.ViewModels.Photos
         public FaceConnectionState State { get; set; }
         public Guid? ConnectionId { get; set; }
 
+        /// What this person says they do. Written by them, shown to every member of the
+        /// event -- unlike contact details it is not a way to reach them, so it needs no
+        /// accepted connection.
+        public string? About { get; set; }
+
         // Populated only when State is Connected or Self, or the attendee opted into
         // making contacts visible to event members (D11). Null otherwise, always.
         public string? ContactEmail { get; set; }
@@ -54,6 +59,10 @@ namespace AlgoForge.ViewModels.Photos
     {
         public Guid Id { get; set; }
         public string Url { get; set; } = string.Empty;
+
+        /// Link to the authorising download action for this photo.
+        public string DownloadUrl { get; set; } = string.Empty;
+
         public DateTime UploadedAt { get; set; }
         public List<GalleryFace> Faces { get; set; } = new();
     }
@@ -70,5 +79,14 @@ namespace AlgoForge.ViewModels.Photos
         /// Faces detected but not surfaced -- unidentified, or tagged and awaiting consent.
         /// Shown as a count only, never as boxes on the photos.
         public int AwaitingConsentCount { get; set; }
+
+        // What this viewer may do here. Resolved once server-side so the toolbar and the
+        // per-photo controls show only what the person can actually use -- an attendee has
+        // no business seeing "Upload photos", and a photographer has no tags to review.
+        public bool CanUpload { get; set; }
+        public bool CanIdentify { get; set; }
+        public bool CanDelete { get; set; }
+        public bool IsAttendee { get; set; }
+        public bool IsDelegate { get; set; }
     }
 }

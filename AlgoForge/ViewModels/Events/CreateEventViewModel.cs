@@ -4,9 +4,10 @@ namespace AlgoForge.ViewModels.Events
 {
     public class CreateEventViewModel
     {
-        [Required]
+        // Optional. Left empty, the photographer runs the event themselves and can hand it
+        // to an organisation later.
         [Display(Name = "Organisation")]
-        public Guid OrganisationId { get; set; }
+        public Guid? OrganisationId { get; set; }
 
         [Required, MaxLength(200)]
         [Display(Name = "Event name")]
