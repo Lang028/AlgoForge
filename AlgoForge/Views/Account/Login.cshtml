@@ -26,6 +26,15 @@
             <div class="mb-3 form-check">
                 <input type="checkbox" class="form-check-input" asp-for="RememberMe" />
                 <label class="form-check-label" asp-for="RememberMe">@Html.DisplayNameFor(m => m.RememberMe)</label>
+                <div class="mb-3">
+                    <label asp-for="SelectedRole" class="form-label"></label>
+                    <select asp-for="SelectedRole" class="form-select"
+                            asp-items="Html.GetEnumSelectList<AlgoForge.Models.EventRole>()">
+                        <option value="">-- Select a role --</option>
+                    </select>
+                    <span asp-validation-for="SelectedRole" class="text-danger"></span>
+                </div>
+
             </div>
 
             <button type="submit" class="btn btn-primary">Sign in</button>
