@@ -58,7 +58,7 @@
     .auth-brand::after {
         width: 220px;
         height: 220px;
-        background: #f4502a;
+        background: #7c5cfc;
         bottom: -80px;
         left: -60px;
     }
@@ -71,7 +71,7 @@
         letter-spacing: -.01em;
     }
 
-    .auth-logo .dot { color: #f4502a; }
+    .auth-logo .dot { color: #7c5cfc; }
 
     .auth-brand h2 {
         font-weight: 800;
@@ -148,7 +148,7 @@
     }
 
     .btn-auth {
-        background: #f4502a;
+        background: #7c5cfc;
         color: #fff;
         border: 0;
         border-radius: 999px;
@@ -158,7 +158,7 @@
         transition: background .15s;
     }
 
-    .btn-auth:hover { background: #d84523; color: #fff; }
+    .btn-auth:hover { background: #5b3fd6; color: #fff; }
 
     .auth-note {
         background: #f7f7f9;
@@ -169,6 +169,64 @@
         margin-bottom: 1.25rem;
     }
 
+    /* ---------- sign-up role choice ---------- */
+    .role-choice {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: .6rem;
+    }
+
+    @@media (max-width: 520px) {
+        .role-choice { grid-template-columns: 1fr; }
+    }
+
+    .role-option {
+        position: relative;
+        display: block;
+        cursor: pointer;
+        margin: 0;
+    }
+
+        .role-option input {
+            position: absolute;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+    .role-body {
+        display: block;
+        border: 1.5px solid #e5e7eb;
+        border-radius: 14px;
+        padding: .8rem .9rem;
+        height: 100%;
+        transition: border-color .15s, background .15s;
+    }
+
+    .role-option input:checked + .role-body {
+        border-color: #7c5cfc;
+        background: #f0edff;
+    }
+
+    .role-option input:focus-visible + .role-body {
+        outline: 2px solid #7c5cfc;
+        outline-offset: 2px;
+    }
+
+    .role-name {
+        display: block;
+        font-weight: 700;
+        color: #14141c;
+        font-size: .92rem;
+        margin-bottom: .15rem;
+    }
+
+    .role-desc {
+        display: block;
+        font-size: .76rem;
+        color: #6b7280;
+        line-height: 1.4;
+    }
+
     .auth-alt {
         text-align: center;
         font-size: .85rem;
@@ -177,7 +235,7 @@
     }
 
     .auth-alt a {
-        color: #f4502a;
+        color: #7c5cfc;
         font-weight: 600;
         text-decoration: none;
     }
@@ -216,9 +274,53 @@
                 <div asp-validation-summary="All" class="text-danger mb-2"></div>
 
                 <div class="mb-3">
+                    <label asp-for="SignUpAs" class="form-label"></label>
+
+                    <div class="role-choice">
+                        <label class="role-option">
+                            <input type="radio" asp-for="SignUpAs" value="Coordinator" />
+                            <span class="role-body">
+                                <span class="role-name">Organisation</span>
+                                <span class="role-desc">
+                                    You run events &mdash; the invitee list, identifying people,
+                                    and the event's settings.
+                                </span>
+                            </span>
+                        </label>
+
+                        <label class="role-option">
+                            <input type="radio" asp-for="SignUpAs" value="Photographer" />
+                            <span class="role-body">
+                                <span class="role-name">Photographer</span>
+                                <span class="role-desc">
+                                    You shoot events and upload the photographs.
+                                </span>
+                            </span>
+                        </label>
+                    </div>
+
+                    <span asp-validation-for="SignUpAs" class="text-danger"></span>
+                </div>
+
+                @* Which name we ask for depends on the choice above; the other is hidden
+                   rather than removed so switching back doesn't lose what was typed. *@
+                <div class="mb-3" data-when="Photographer">
                     <label asp-for="DisplayName" class="form-label"></label>
                     <input asp-for="DisplayName" class="form-control" placeholder="Your full name" />
                     <span asp-validation-for="DisplayName" class="text-danger"></span>
+                </div>
+
+                <div class="mb-3" data-when="Coordinator">
+                    <label asp-for="OrganisationName" class="form-label"></label>
+                    <input asp-for="OrganisationName" class="form-control" placeholder="e.g. Durban Events Co" />
+                    <div class="form-text">This is the name that appears on your events.</div>
+                    <span asp-validation-for="OrganisationName" class="text-danger"></span>
+                </div>
+
+                <div class="mb-3" data-when="Coordinator">
+                    <label asp-for="OrganisationContactEmail" class="form-label"></label>
+                    <input asp-for="OrganisationContactEmail" class="form-control" placeholder="Leave blank to use your sign-in email" />
+                    <span asp-validation-for="OrganisationContactEmail" class="text-danger"></span>
                 </div>
 
                 <div class="mb-3">
@@ -257,4 +359,25 @@
 
 @section Scripts {
     @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+
+    <script>
+        (function () {
+            var choices = document.querySelectorAll('input[name="SignUpAs"]');
+            var blocks = document.querySelectorAll('[data-when]');
+
+            function sync() {
+                var picked = document.querySelector('input[name="SignUpAs"]:checked');
+                var value = picked ? picked.value : null;
+
+                blocks.forEach(function (block) {
+                    // Nothing is chosen yet on a fresh form, so ask for neither name until
+                    // the person has said which they are.
+                    block.style.display = (value && block.dataset.when === value) ? '' : 'none';
+                });
+            }
+
+            choices.forEach(function (c) { c.addEventListener('change', sync); });
+            sync();
+        })();
+    </script>
 }

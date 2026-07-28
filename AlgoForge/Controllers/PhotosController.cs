@@ -19,19 +19,22 @@ namespace AlgoForge.Controllers
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly IWebHostEnvironment _env;
         private readonly ILogger<PhotosController> _logger;
+        private readonly IEventAccessService _access;
 
         public PhotosController(
             AlgoForgeDbContext db,
             PersonPipelineService pipeline,
             UserManager<ApplicationUser> userManager,
             IWebHostEnvironment env,
-            ILogger<PhotosController> logger)
+            ILogger<PhotosController> logger,
+            IEventAccessService access)
         {
             _db = db;
             _pipeline = pipeline;
             _userManager = userManager;
             _env = env;
             _logger = logger;
+            _access = access;
         }
 
         [HttpGet]
@@ -214,6 +217,13 @@ namespace AlgoForge.Controllers
 
                 _db.Photos.Add(photo);
 
+                // Saved before detection runs, not after. Detection is the slow part -- a
+                // network round trip to Python, seconds per photo -- and holding an unsaved
+                // row across it meant a database hiccup during that gap lost a photo that
+                // was already safely on disk. LocalDB stopping itself while idle is exactly
+                // that hiccup, and it is why the connection is configured to retry at all.
+                await _db.SaveChangesAsync();
+
                 // Detection only -- no clustering here. Clustering is per-event and runs
                 // once after the batch, which is both correct (photo 1 can now be grouped
                 // using evidence from photo 300) and far cheaper than the old
@@ -223,6 +233,10 @@ namespace AlgoForge.Controllers
                 // the request path. The seam to fix it is right here -- enqueue instead of
                 // awaiting.
                 await _pipeline.ProcessPhotoAsync(photo, filePath);
+
+                // Second save persists the detections and the processing status. If this
+                // one fails the photograph itself is already stored and can be reprocessed;
+                // it no longer takes the whole upload down with it.
                 await _db.SaveChangesAsync();
                 uploaded++;
             }
@@ -300,6 +314,158 @@ namespace AlgoForge.Controllers
             return leaf.Length <= 60 ? leaf : string.Concat(leaf.AsSpan(0, 57), "...");
         }
 
+        // Serves the image bytes for one photo, gated on membership of that photo's event.
+        //
+        // Photos used to be served straight off disk by a static-file provider mapped to
+        // /uploads, which meant anyone holding (or guessing) a URL could read a private
+        // event's pictures with no account at all -- and the URL survived being removed
+        // from the event. Every image in the app now comes through here instead.
+        [HttpGet]
+        [Route("Photos/File/{id}")]
+        public async Task<IActionResult> File(Guid id)
+        {
+            var photo = await _db.Photos.FirstOrDefaultAsync(p => p.Id == id);
+            if (photo is null || photo.Status != PhotoStatus.Visible)
+            {
+                return NotFound();
+            }
+
+            var userIdText = _userManager.GetUserId(User);
+            if (userIdText is null || !Guid.TryParse(userIdText, out var viewerId))
+            {
+                return Challenge();
+            }
+
+            var allowed = await _access.HasAnyRoleAsync(viewerId, photo.EventId, new[]
+            {
+                EventRole.Coordinator, EventRole.Photographer, EventRole.Attendee, EventRole.Delegate
+            }, HttpContext.RequestAborted);
+
+            if (!allowed)
+            {
+                return Forbid();
+            }
+
+            var path = ResolveStoredPath(photo);
+            if (path is null)
+            {
+                return NotFound();
+            }
+
+            // A private gallery shouldn't linger in a shared browser cache after access ends.
+            Response.Headers.CacheControl = "no-store, no-cache, must-revalidate, private";
+
+            return PhysicalFile(path, ContentTypeFor(path));
+        }
+
+        // GET /Photos/Download/{id} -- same access check as File, but sent as an
+        // attachment. D5 and D20 give every member of the event, delegates included, the
+        // right to keep a copy of the pictures they appear in.
+        [HttpGet]
+        [Route("Photos/Download/{id}")]
+        public async Task<IActionResult> Download(Guid id)
+        {
+            var (photo, path) = await AuthorisedPhotoFileAsync(id);
+            if (photo is null || path is null)
+            {
+                return photo is null ? NotFound() : NotFound();
+            }
+
+            Response.Headers.CacheControl = "no-store, no-cache, must-revalidate, private";
+
+            var fileName = $"{photo.UploadedAt:yyyy-MM-dd}-{photo.Id.ToString()[..8]}{Path.GetExtension(path)}";
+            return PhysicalFile(path, ContentTypeFor(path), fileName);
+        }
+
+        // POST /Photos/{id}/Delete -- a soft hide, not an erase (D8). The file stays on
+        // disk and the row keeps its detections and tags, so a takedown is reversible and
+        // the audit trail survives. Staff only: the people who ran the event decide what
+        // comes down.
+        [HttpPost]
+        [Route("Photos/{id}/Delete")]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Delete(Guid id)
+        {
+            var photo = await _db.Photos.FirstOrDefaultAsync(p => p.Id == id);
+            if (photo is null)
+            {
+                return NotFound();
+            }
+
+            var userIdText = _userManager.GetUserId(User);
+            if (userIdText is null || !Guid.TryParse(userIdText, out var viewerId))
+            {
+                return Challenge();
+            }
+
+            var allowed = await _access.HasAnyRoleAsync(viewerId, photo.EventId,
+                new[] { EventRole.Coordinator, EventRole.Photographer }, HttpContext.RequestAborted);
+
+            if (!allowed)
+            {
+                return Forbid();
+            }
+
+            photo.Status = PhotoStatus.Hidden;
+            await _db.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = "Photo removed from the gallery.";
+            return RedirectToAction(nameof(Index), new { eventId = photo.EventId });
+        }
+
+        // Shared by File and Download: resolves the photo, checks the viewer belongs to its
+        // event, and returns the path on disk.
+        private async Task<(Photo? Photo, string? Path)> AuthorisedPhotoFileAsync(Guid id)
+        {
+            var photo = await _db.Photos.FirstOrDefaultAsync(p => p.Id == id);
+            if (photo is null || photo.Status != PhotoStatus.Visible)
+            {
+                return (null, null);
+            }
+
+            var userIdText = _userManager.GetUserId(User);
+            if (userIdText is null || !Guid.TryParse(userIdText, out var viewerId))
+            {
+                return (null, null);
+            }
+
+            var allowed = await _access.HasAnyRoleAsync(viewerId, photo.EventId, new[]
+            {
+                EventRole.Coordinator, EventRole.Photographer, EventRole.Attendee, EventRole.Delegate
+            }, HttpContext.RequestAborted);
+
+            return allowed ? (photo, ResolveStoredPath(photo)) : (null, null);
+        }
+
+        // BlobUrl is "/uploads/{eventId}/{fileName}" -- map it back onto App_Data/uploads.
+        private string? ResolveStoredPath(Photo photo)
+        {
+            var relative = photo.BlobUrl.StartsWith("/uploads/")
+                ? photo.BlobUrl["/uploads/".Length..]
+                : photo.BlobUrl.TrimStart('/');
+
+            var root = Path.Combine(_env.ContentRootPath, "App_Data", "uploads");
+            var full = Path.GetFullPath(Path.Combine(root, relative.Replace('/', Path.DirectorySeparatorChar)));
+
+            // Never let a stored value escape the uploads root.
+            if (!full.StartsWith(Path.GetFullPath(root), StringComparison.OrdinalIgnoreCase))
+            {
+                return null;
+            }
+
+            return System.IO.File.Exists(full) ? full : null;
+        }
+
+        private static string ContentTypeFor(string path) =>
+            Path.GetExtension(path).ToLowerInvariant() switch
+            {
+                ".png" => "image/png",
+                ".gif" => "image/gif",
+                ".webp" => "image/webp",
+                ".bmp" => "image/bmp",
+                _ => "image/jpeg"
+            };
+
         // The gallery shows every visible photo to every event member -- the photographs are
         // the event's, and they stay up regardless of who has connected with whom.
         //
@@ -355,12 +521,21 @@ namespace AlgoForge.Controllers
 
             var connectionByOtherUser = connections.ToDictionary(c => c.OtherUserId(viewerId));
 
+            // One resolve of the viewer's roles drives the whole toolbar, so the page can't
+            // offer an action the request would then refuse.
+            var viewerRoles = await _access.ResolveRolesAsync(viewerId, eventId, HttpContext.RequestAborted);
+
             var model = new GalleryViewModel
             {
                 EventId = eventId,
                 EventName = evt.Name,
                 ConfirmedPeopleCount = confirmedTags.Select(t => t.TaggedAttendeeId).Distinct().Count(),
-                AwaitingConsentCount = detectionIds.Count - tagByDetection.Count
+                AwaitingConsentCount = detectionIds.Count - tagByDetection.Count,
+                CanUpload = viewerRoles.Contains(EventRole.Photographer),
+                CanIdentify = viewerRoles.Contains(EventRole.Coordinator) || viewerRoles.Contains(EventRole.Photographer),
+                CanDelete = viewerRoles.Contains(EventRole.Coordinator) || viewerRoles.Contains(EventRole.Photographer),
+                IsAttendee = viewerRoles.Contains(EventRole.Attendee),
+                IsDelegate = viewerRoles.Contains(EventRole.Delegate)
             };
 
             foreach (var photo in photos)
@@ -368,7 +543,8 @@ namespace AlgoForge.Controllers
                 var galleryPhoto = new GalleryPhoto
                 {
                     Id = photo.Id,
-                    Url = photo.BlobUrl,
+                    Url = Url.Action(nameof(File), "Photos", new { id = photo.Id })!,
+                    DownloadUrl = Url.Action(nameof(Download), "Photos", new { id = photo.Id })!,
                     UploadedAt = photo.UploadedAt
                 };
 
@@ -402,6 +578,10 @@ namespace AlgoForge.Controllers
                 DetectionId = detection.Id,
                 AttendeeId = attendee.Id,
                 Name = attendee.Name,
+                // Shown to every member. It is what the person chose to say about
+                // themselves, not a means of contacting them, so it isn't gated on a
+                // connection the way ContactEmail and ContactInfo are below.
+                About = string.IsNullOrWhiteSpace(attendee.About) ? null : attendee.About,
                 BoxX = detection.FaceX ?? detection.BoxX,
                 BoxY = detection.FaceY ?? detection.BoxY,
                 BoxWidth = detection.FaceWidth ?? detection.BoxWidth,

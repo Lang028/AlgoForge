@@ -31,9 +31,16 @@
 </style>
 
 <div class="gk-hero my-2">
-    <h1>My tags</h1>
-    <div class="crumb">Geeked On <span class="sep">&rsaquo;</span> @eventName <span class="sep">&rsaquo;</span> Tags</div>
-    <p class="hero-sub">Every tag needs your say-so. Confirm the ones that are really you; reject the rest &mdash; nothing goes public without your approval.</p>
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+        <div>
+            <h1>My tags</h1>
+            <div class="crumb">Geeked On <span class="sep">&rsaquo;</span> @eventName <span class="sep">&rsaquo;</span> Tags</div>
+            <p class="hero-sub">Every tag needs your say-so. Confirm the ones that are really you; reject the rest &mdash; nothing goes public without your approval.</p>
+        </div>
+        <a asp-controller="Delegates" asp-action="Index" asp-route-eventId="@eventId" class="btn gk-btn-soft">
+            My delegates
+        </a>
+    </div>
 </div>
 
 @if (noAttendeeRecord)
@@ -66,7 +73,7 @@ else
             <div class="tag-card">
                 @if (photo is not null)
                 {
-                    <img src="@photo.BlobUrl" alt="Tagged photo" />
+                    <img src="@Url.Action("File", "Photos", new { id = photo.Id })" alt="Tagged photo" />
                 }
                 <div class="body">
                     <span class="gk-pill @pillClass mb-2">@tag.Status</span>

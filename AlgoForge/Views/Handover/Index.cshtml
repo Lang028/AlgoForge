@@ -1,0 +1,95 @@
+@model List<AlgoForge.Models.OrganisationHandover>
+@{
+    var eventId = (Guid)ViewData["EventId"]!;
+    var eventName = (string)ViewData["EventName"]!;
+    var organisationName = ViewData["OrganisationName"] as string;
+    ViewData["Title"] = "Hand over event";
+    var pending = Model.Where(h => h.AcceptedAt is null).ToList();
+}
+
+<div class="gk-hero my-2">
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+        <div>
+            <h1>Hand over</h1>
+            <div class="crumb">Geeked On <span class="sep">&rsaquo;</span> @eventName <span class="sep">&rsaquo;</span> Hand over</div>
+        </div>
+        <a asp-controller="Events" asp-action="Index" class="btn gk-btn-soft">Back to events</a>
+    </div>
+</div>
+
+@if (TempData["SuccessMessage"] is string ok)
+{
+    <div class="alert alert-success mt-3">@ok</div>
+}
+@if (TempData["ErrorMessage"] is string err)
+{
+    <div class="alert alert-danger mt-3">@err</div>
+}
+
+@if (organisationName is not null)
+{
+    <div class="gk-panel mt-3">
+        <p class="mb-0">
+            <strong>@organisationName</strong> already manages this event.
+        </p>
+    </div>
+}
+else
+{
+    <div class="gk-panel mt-3">
+        <h2 style="font-size:1.05rem; font-weight:700; color: var(--gk-ink);">
+            You're running this event yourself
+        </h2>
+        <p class="text-muted" style="max-width:62ch;">
+            That's fine for a small job &mdash; nothing needs an organisation behind it.
+            If you'd rather an organisation took it on, invite them by email. They set their
+            own organisation up when they accept; you don't create it for them, and you keep
+            your photographer access either way.
+        </p>
+
+        <form method="post" asp-action="Invite" asp-route-eventId="@eventId" class="row g-2">
+            @Html.AntiForgeryToken()
+            <div class="col-md-8">
+                <input name="email" type="email" class="form-control"
+                       placeholder="Their email address" required />
+            </div>
+            <div class="col-md-4">
+                <button type="submit" class="btn gk-btn-coral w-100">Send invite</button>
+            </div>
+        </form>
+    </div>
+
+    @if (pending.Any())
+    {
+        <div class="gk-panel mt-3">
+            <h2 style="font-size:1.05rem; font-weight:700; color: var(--gk-ink);">Pending invites</h2>
+            <table class="gk-table mb-0">
+                <thead>
+                    <tr>
+                        <th>Email</th>
+                        <th>Sent</th>
+                        <th class="text-end">Withdraw</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var invite in pending)
+                    {
+                        <tr>
+                            <td><strong>@invite.Email</strong></td>
+                            <td class="text-muted">@invite.CreatedAt.ToLocalTime().ToString("dd MMM yyyy HH:mm")</td>
+                            <td class="text-end">
+                                <form method="post"
+                                      asp-action="Revoke"
+                                      asp-route-eventId="@eventId"
+                                      asp-route-inviteId="@invite.Id">
+                                    @Html.AntiForgeryToken()
+                                    <button type="submit" class="btn gk-btn-danger gk-btn-sm">Withdraw</button>
+                                </form>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+}

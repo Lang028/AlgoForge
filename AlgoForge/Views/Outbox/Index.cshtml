@@ -1,0 +1,64 @@
+@model IEnumerable<AlgoForge.Controllers.OutboxController.OutboxItem>
+@{
+    ViewData["Title"] = "Outbox";
+}
+
+<div class="d-flex justify-content-between align-items-end flex-wrap gap-3 mb-4">
+    <div>
+        <div class="gk-eyebrow">GEEKED ON &rsaquo; OUTBOX</div>
+        <h1 class="fw-bold" style="color:#14141c;">Outbox</h1>
+        <p class="text-muted mb-0">
+            Demo mode writes email here instead of sending it. Open a message to click its
+            invite, claim or connection link.
+        </p>
+    </div>
+
+    @if (Model.Any())
+    {
+        <form asp-action="Clear" method="post">
+            @Html.AntiForgeryToken()
+            <button type="submit" class="btn gk-btn-soft">Clear all</button>
+        </form>
+    }
+</div>
+
+@if (!Model.Any())
+{
+    <div class="gk-panel text-center py-5">
+        <h2 class="fw-bold" style="font-size:1.2rem;color:#14141c;">Nothing sent yet</h2>
+        <p class="text-muted mb-0">
+            Invite an attendee, or send a connection request, and the email will appear here.
+        </p>
+    </div>
+}
+else
+{
+    <div class="gk-panel p-0" style="overflow:hidden;">
+        <table class="table mb-0 align-middle">
+            <thead>
+                <tr>
+                    <th style="width:180px;">Sent</th>
+                    <th>To</th>
+                    <th>Subject</th>
+                    <th style="width:120px;" class="text-end">Open</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in Model)
+                {
+                    <tr>
+                        <td class="text-muted">@item.SentAt.ToString("dd MMM yyyy HH:mm")</td>
+                        <td><strong>@item.To</strong></td>
+                        <td>@item.Subject</td>
+                        <td class="text-end">
+                            <a class="btn gk-btn-soft btn-sm"
+                               asp-action="Message"
+                               asp-route-name="@item.FileName"
+                               target="_blank">Open</a>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}

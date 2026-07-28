@@ -16,7 +16,7 @@
         <div class="mb-3">
             <label asp-for="OrganisationId" class="form-label"></label>
             <select asp-for="OrganisationId" class="form-select">
-                <option value="">Select an organisation</option>
+                <option value="">No organisation &mdash; I'll run this event myself</option>
                 @foreach (var org in organisations)
                 {
                     <option value="@org.Id">@org.Name</option>
@@ -24,8 +24,9 @@
             </select>
             <span asp-validation-for="OrganisationId" class="text-danger"></span>
             <div class="form-text">
-                Every event is hosted under an organisation.
-                <a class="gk-link" asp-controller="Organisations" asp-action="Create">Create a new organisation</a> if yours isn't listed.
+                Optional. Small events often have no organisation behind them &mdash; leave this
+                as it is and you keep full control of the event. You can hand it to an
+                organisation later, and they set themselves up when they accept.
             </div>
         </div>
 

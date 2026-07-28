@@ -4,6 +4,7 @@ using AlgoForge.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace AlgoForge.Migrations
 {
     [DbContext(typeof(AlgoForgeDbContext))]
-    partial class AlgoForgeDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260728191101_AddDelegateInvites")]
+    partial class AddDelegateInvites
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -124,10 +127,6 @@ namespace AlgoForge.Migrations
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("About")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
 
                     b.Property<Guid?>("ClaimedByUserId")
                         .HasColumnType("uniqueidentifier");
@@ -276,7 +275,7 @@ namespace AlgoForge.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<Guid?>("OrganisationId")
+                    b.Property<Guid>("OrganisationId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<int>("Status")
@@ -346,45 +345,6 @@ namespace AlgoForge.Migrations
                     b.HasIndex("AdminUserId");
 
                     b.ToTable("Organisations");
-                });
-
-            modelBuilder.Entity("AlgoForge.Models.OrganisationHandover", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTime?>("AcceptedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<Guid?>("CreatedOrganisationId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("Email")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<Guid>("EventId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid>("InvitedByUserId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<bool>("Revoked")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("Token")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("EventId");
-
-                    b.ToTable("OrganisationHandovers");
                 });
 
             modelBuilder.Entity("AlgoForge.Models.PersonCluster", b =>
@@ -788,7 +748,8 @@ namespace AlgoForge.Migrations
                     b.HasOne("AlgoForge.Models.Organisation", "Organisation")
                         .WithMany("Events")
                         .HasForeignKey("OrganisationId")
-                        .OnDelete(DeleteBehavior.Restrict);
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
 
                     b.Navigation("Organisation");
                 });
@@ -828,17 +789,6 @@ namespace AlgoForge.Migrations
                         .IsRequired();
 
                     b.Navigation("AdminUser");
-                });
-
-            modelBuilder.Entity("AlgoForge.Models.OrganisationHandover", b =>
-                {
-                    b.HasOne("AlgoForge.Models.Event", "Event")
-                        .WithMany()
-                        .HasForeignKey("EventId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Event");
                 });
 
             modelBuilder.Entity("AlgoForge.Models.PersonCluster", b =>

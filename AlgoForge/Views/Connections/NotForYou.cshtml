@@ -1,0 +1,30 @@
+@{
+    ViewData["Title"] = "Connections";
+}
+
+<div class="d-flex justify-content-center py-5">
+    <div class="gk-panel text-center" style="max-width: 560px; width: 100%;">
+
+        <div style="width:64px;height:64px;border-radius:50%;background:#7c5cfc;color:#fff;font-size:1.6rem;display:flex;align-items:center;justify-content:center;margin:0 auto .9rem;">
+            &#128101;
+        </div>
+
+        <h2 class="fw-bold" style="color:#14141c; font-size:1.4rem;">Connections are for attendees</h2>
+
+        <p class="text-muted" style="font-size:1.02rem;">
+            Connecting is something guests do with each other after an event &mdash; it shares
+            personal contact details, so it stays between the people who were actually there.
+        </p>
+
+        <p class="text-muted">
+            If you were invited to an event, open the invite link from your email to claim
+            your place first. Coordinators and photographers run events from the
+            <a asp-controller="Events" asp-action="Index">Events</a> page instead.
+        </p>
+
+        <div class="mt-4">
+            <a class="btn gk-btn-soft" asp-controller="Home" asp-action="Index">Back to dashboard</a>
+        </div>
+
+    </div>
+</div>

@@ -40,7 +40,7 @@
     .admin-badge {
         display: inline-block;
         background: rgba(244, 80, 42, .15);
-        color: #f4502a;
+        color: #7c5cfc;
         border: 1px solid rgba(244, 80, 42, .4);
         border-radius: 999px;
         font-size: .65rem;
@@ -83,7 +83,7 @@
 
     .a-card small { color: rgba(255, 255, 255, .55); }
 
-    .a-card .accent-coral { color: #f4502a; }
+    .a-card .accent-coral { color: #7c5cfc; }
     .a-card .accent-violet { color: #7c5cfc; }
 
     .a-panel {
@@ -126,7 +126,7 @@
         padding: .25rem .65rem;
     }
 
-    .status-pill.live { background: #f4502a; }
+    .status-pill.live { background: #7c5cfc; }
     .status-pill.draft { background: #7c5cfc; }
     .status-pill.post { background: #3a3a4a; }
     .status-pill.archived { background: #6b7280; }
@@ -197,7 +197,7 @@
                     <div class="tag-strip mb-3">
                         <span><span class="legend-dot" style="background:#e5e7eb"></span>Suggested @Model.SuggestedTags</span>
                         <span><span class="legend-dot" style="background:#7c5cfc"></span>Confirmed @Model.ConfirmedTags</span>
-                        <span><span class="legend-dot" style="background:#f4502a"></span>Rejected @Model.RejectedTags</span>
+                        <span><span class="legend-dot" style="background:#7c5cfc"></span>Rejected @Model.RejectedTags</span>
                     </div>
                 </div>
                 <div class="row g-2">
@@ -261,7 +261,7 @@
     <script>
         const dayLabels = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(dayLabels));
         const dayCounts = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(dayCounts));
-        const barColors = dayCounts.map((_, i) => i === dayCounts.length - 1 ? '#f4502a' : '#7c5cfc');
+        const barColors = dayCounts.map((_, i) => i === dayCounts.length - 1 ? '#7c5cfc' : '#7c5cfc');
 
         new Chart(document.getElementById('adminUploadsChart'), {
             type: 'bar',

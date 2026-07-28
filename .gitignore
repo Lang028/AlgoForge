@@ -372,3 +372,7 @@ face_service/.venv/
 face_service/__pycache__/
 face_service/.pytest_cache/
 .claude/
+
+# Runtime data: uploaded photos and the demo-mode email outbox.
+# Never source -- the outbox contains live invite/claim tokens.
+AlgoForge/App_Data/

@@ -32,6 +32,29 @@ namespace AlgoForge.Controllers
         public async Task<IActionResult> Register(RegisterViewModel model, string? returnUrl = null)
         {
             ViewData["ReturnUrl"] = returnUrl;
+
+            // Only the two staff roles may be chosen here. Attendee and Delegate arrive by
+            // invite link, and Admin is never self-assigned -- a posted value outside this
+            // pair is rejected rather than trusted.
+            if (model.SignUpAs is not (EventRole.Coordinator or EventRole.Photographer))
+            {
+                ModelState.AddModelError(nameof(model.SignUpAs),
+                    "Choose whether you're signing up as an organisation or a photographer.");
+            }
+
+            // An organisation is named by its organisation name; a photographer by their own.
+            var signingUpAsOrganisation = model.SignUpAs == EventRole.Coordinator;
+
+            if (signingUpAsOrganisation && string.IsNullOrWhiteSpace(model.OrganisationName))
+            {
+                ModelState.AddModelError(nameof(model.OrganisationName), "Enter your organisation's name.");
+            }
+
+            if (!signingUpAsOrganisation && string.IsNullOrWhiteSpace(model.DisplayName))
+            {
+                ModelState.AddModelError(nameof(model.DisplayName), "Enter your full name.");
+            }
+
             if (!ModelState.IsValid)
             {
                 return View(model);
@@ -41,14 +64,43 @@ namespace AlgoForge.Controllers
             {
                 UserName = model.Email,
                 Email = model.Email,
-                DisplayName = model.DisplayName
+                // The organisation's name is what shows on its events, so it is carried
+                // through as the display name rather than asking for a personal one too.
+                DisplayName = signingUpAsOrganisation
+                    ? model.OrganisationName!.Trim()
+                    : model.DisplayName.Trim()
             };
 
             var result = await _userManager.CreateAsync(user, model.Password);
             if (result.Succeeded)
             {
-                // No membership is granted here. A new account has standing in no event
-                // until it creates one, accepts an invitation, or claims an attendee record.
+                // Still no membership. The choice above is recorded as the ActiveRole claim
+                // only -- a lens for the dashboard and navigation. Standing in an event
+                // continues to come from creating one, accepting an invitation, or claiming
+                // an attendee record.
+                await _userManager.AddClaimAsync(user,
+                    new System.Security.Claims.Claim("ActiveRole", model.SignUpAs!.Value.ToString()));
+
+                // An organisation account gets its Organisation straight away, with the
+                // registrant as its admin -- otherwise they'd sign up as an organisation and
+                // then have nowhere to put an event. This is the one place an organisation
+                // is created by the person it belongs to; a photographer handing an event
+                // over still invites by email rather than creating one on someone's behalf.
+                if (signingUpAsOrganisation)
+                {
+                    _db.Organisations.Add(new Organisation
+                    {
+                        Id = Guid.NewGuid(),
+                        Name = model.OrganisationName!.Trim(),
+                        ContactEmail = string.IsNullOrWhiteSpace(model.OrganisationContactEmail)
+                            ? model.Email.Trim()
+                            : model.OrganisationContactEmail.Trim(),
+                        AdminUserId = user.Id
+                    });
+
+                    await _db.SaveChangesAsync();
+                }
+
                 await _signInManager.SignInAsync(user, isPersistent: false);
                 return RedirectToLocal(returnUrl);
             }
@@ -102,12 +154,15 @@ namespace AlgoForge.Controllers
                 return RedirectToAction(nameof(AdminController.Index), "Admin");
             }
 
-            // Persist the chosen role as an "ActiveRole" claim and refresh the cookie so
-            // the whole app can read it. It is a lens, not a permission: per-event access
-            // still comes from EventMembership via RequireEventRole.
-            var role = model.SelectedRole!.Value;
+            // Signing in no longer asks which role you want. The role chosen at sign-up is
+            // remembered, and if it doesn't match anything the account actually holds --
+            // someone who signed up as a photographer and has since claimed an attendee
+            // invite -- it falls back to a role they really do have.
             var existingClaim = (await _userManager.GetClaimsAsync(user))
                 .FirstOrDefault(c => c.Type == "ActiveRole");
+
+            var role = await ResolveActiveRoleAsync(user, model.SelectedRole, existingClaim?.Value);
+
             var newClaim = new System.Security.Claims.Claim("ActiveRole", role.ToString());
             if (existingClaim is null)
             {
@@ -149,6 +204,59 @@ namespace AlgoForge.Controllers
             }
 
             return RedirectToAction(nameof(HomeController.Index), "Home");
+        }
+
+        // Which role the app should present this account with.
+        //
+        // Preference order: anything explicitly asked for, then the role remembered from
+        // sign-up, then whatever the account actually holds. The remembered role is only
+        // kept if it still makes sense -- an account that signed up as a photographer and
+        // has since only ever claimed attendee invites should land on the attendee side.
+        private async Task<EventRole> ResolveActiveRoleAsync(
+            ApplicationUser user, EventRole? requested, string? rememberedValue)
+        {
+            if (requested is { } explicitChoice)
+            {
+                return explicitChoice;
+            }
+
+            var held = await _db.EventMemberships
+                .Where(m => m.UserId == user.Id)
+                .Select(m => m.Role)
+                .Distinct()
+                .ToListAsync();
+
+            if (await _db.Organisations.AnyAsync(o => o.AdminUserId == user.Id))
+            {
+                held.Add(EventRole.Admin);
+            }
+
+            if (Enum.TryParse<EventRole>(rememberedValue, out var remembered))
+            {
+                // Staff roles are kept even with nothing to show yet: a new coordinator has
+                // to be able to get in and create their first event.
+                if (held.Contains(remembered)
+                    || remembered is EventRole.Coordinator or EventRole.Photographer)
+                {
+                    return remembered;
+                }
+            }
+
+            // Nothing remembered that still applies -- fall back to what they actually hold,
+            // most capable first.
+            foreach (var candidate in new[]
+                     {
+                         EventRole.Admin, EventRole.Coordinator, EventRole.Photographer,
+                         EventRole.Attendee, EventRole.Delegate
+                     })
+            {
+                if (held.Contains(candidate))
+                {
+                    return candidate;
+                }
+            }
+
+            return EventRole.Attendee;
         }
 
         [HttpPost]

@@ -39,7 +39,7 @@
     .events-hero::before {
         width: 260px;
         height: 260px;
-        background: #f4502a;
+        background: #7c5cfc;
         top: -80px;
         right: -60px;
     }
@@ -69,10 +69,10 @@
         z-index: 1;
     }
 
-    .events-hero .crumb .sep { margin: 0 .4rem; color: #f4502a; }
+    .events-hero .crumb .sep { margin: 0 .4rem; color: #7c5cfc; }
 
     .events-hero .btn-create {
-        background: #f4502a;
+        background: #7c5cfc;
         color: #fff;
         border-radius: 999px;
         font-weight: 600;
@@ -82,7 +82,7 @@
         z-index: 1;
     }
 
-    .events-hero .btn-create:hover { background: #d84523; color: #fff; }
+    .events-hero .btn-create:hover { background: #5b3fd6; color: #fff; }
 
     /* ---------- cards ---------- */
     .event-card {
@@ -109,7 +109,7 @@
     }
 
     .event-cover.placeholder {
-        background: linear-gradient(135deg, #14141c 0%, #7c5cfc 60%, #f4502a 120%);
+        background: #14141c;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -141,7 +141,7 @@
         padding: .28rem .7rem;
     }
 
-    .status-pill.live { background: #f4502a; }
+    .status-pill.live { background: #7c5cfc; }
     .status-pill.draft { background: #7c5cfc; }
     .status-pill.post { background: #14141c; }
     .status-pill.archived { background: #9ca3af; }
@@ -156,7 +156,7 @@
 
     .event-org {
         font-size: .78rem;
-        color: #f4502a;
+        color: #7c5cfc;
         font-weight: 600;
         margin-bottom: .9rem;
     }
@@ -182,11 +182,11 @@
     }
 
     .btn-coral {
-        background: #f4502a;
+        background: #7c5cfc;
         color: #fff;
     }
 
-    .btn-coral:hover { background: #d84523; color: #fff; }
+    .btn-coral:hover { background: #5b3fd6; color: #fff; }
 
     .btn-soft {
         background: #f3f4f6;
@@ -245,7 +245,16 @@ else
                             <small>@evt.EventDate.ToString("yyyy-MM-dd")</small>
                         </div>
                         <h5>@evt.Name</h5>
-                        <div class="event-org">&#128205; @evt.OrganisationName</div>
+                        <div class="event-org">
+                            @if (evt.OrganisationName is null)
+                            {
+                                <span title="You run this event yourself">&#128100; No organisation</span>
+                            }
+                            else
+                            {
+                                <span>&#128205; @evt.OrganisationName</span>
+                            }
+                        </div>
                         <div class="event-stats">
                             @evt.PhotoCount photo@(evt.PhotoCount == 1 ? "" : "s") &middot;
                             @evt.AttendeeCount attendee@(evt.AttendeeCount == 1 ? "" : "s")
@@ -255,6 +264,10 @@ else
                             <a class="btn btn-soft" asp-controller="Photos" asp-action="Upload" asp-route-eventId="@evt.Id">Upload</a>
                             <a class="btn btn-soft" asp-action="Attendees" asp-route-eventId="@evt.Id">Attendees</a>
                             <a class="btn btn-soft" asp-action="ImportAttendees" asp-route-eventId="@evt.Id">Import CSV</a>
+                            @if (evt.OrganisationName is null)
+                            {
+                                <a class="btn btn-soft" asp-controller="Handover" asp-action="Index" asp-route-eventId="@evt.Id">Hand over</a>
+                            }
                         </div>
                     </div>
                 </div>

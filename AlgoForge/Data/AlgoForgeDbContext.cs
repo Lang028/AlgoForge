@@ -21,10 +21,32 @@ namespace AlgoForge.Data
         public DbSet<PersonDetection> PersonDetections => Set<PersonDetection>();
         public DbSet<Tag> Tags => Set<Tag>();
         public DbSet<Connection> Connections => Set<Connection>();
+        public DbSet<DelegateInvite> DelegateInvites => Set<DelegateInvite>();
+        public DbSet<OrganisationHandover> OrganisationHandovers => Set<OrganisationHandover>();
 
         protected override void OnModelCreating(ModelBuilder builder)
         {
             base.OnModelCreating(builder);
+
+            // Same reason as EventMembership below: several paths reach ApplicationUser
+            // and Event, so deletes are restricted rather than cascading.
+            builder.Entity<DelegateInvite>()
+                .HasOne(d => d.ClaimedByUser)
+                .WithMany()
+                .HasForeignKey(d => d.ClaimedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            builder.Entity<DelegateInvite>()
+                .HasOne(d => d.Event)
+                .WithMany()
+                .HasForeignKey(d => d.EventId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            builder.Entity<DelegateInvite>()
+                .HasOne(d => d.Attendee)
+                .WithMany()
+                .HasForeignKey(d => d.AttendeeId)
+                .OnDelete(DeleteBehavior.Cascade);
 
             // EventMembership.User and EventMembership.GrantedByUser both point at
             // ApplicationUser -- restrict both to avoid multiple SQL Server cascade paths.
@@ -51,6 +73,12 @@ namespace AlgoForge.Data
                 .WithMany()
                 .HasForeignKey(p => p.UploadedByUserId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            builder.Entity<OrganisationHandover>()
+                .HasOne(h => h.Event)
+                .WithMany()
+                .HasForeignKey(h => h.EventId)
+                .OnDelete(DeleteBehavior.Cascade);
 
             // Event.OrganisationId is a required FK with no explicit behavior configured --
             // every other relationship in this file is deliberately Restrict, so an

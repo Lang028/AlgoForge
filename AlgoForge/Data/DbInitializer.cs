@@ -127,6 +127,26 @@ namespace AlgoForge.Data
                 await GrantAsync(db, demoEvent.Id, seedAdminUser.Id, EventRole.Photographer);
             }
 
+            // A photographer of their own, holding *only* the Photographer role. The seed
+            // admin above wears both hats, which is realistic for a one-person event but
+            // hides the thing D1 actually specifies: the two roles are disjoint. With this
+            // persona you can show a photographer who can upload but cannot open the
+            // attendee list, and a coordinator who can do the reverse.
+            var demoPhotographer = await userManager.FindByEmailAsync("demo-photographer@algoforge.local");
+            if (demoPhotographer is null)
+            {
+                demoPhotographer = new ApplicationUser
+                {
+                    UserName = "demo-photographer@algoforge.local",
+                    Email = "demo-photographer@algoforge.local",
+                    DisplayName = "Demo Photographer",
+                    EmailConfirmed = true
+                };
+                await userManager.CreateAsync(demoPhotographer, "DemoPhotographer123!");
+            }
+
+            await GrantAsync(db, demoEvent.Id, demoPhotographer.Id, EventRole.Photographer);
+
             await GrantAsync(db, demoEvent.Id, demoAttendeeUser.Id, EventRole.Attendee);
             await db.SaveChangesAsync();
         }
