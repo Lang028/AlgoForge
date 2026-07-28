@@ -6,6 +6,11 @@ namespace AlgoForge.Models
         Coordinator,
         Photographer,
         Attendee,
-        Delegate
+        Delegate,
+
+        // Organisation administrator. Unlike the four above it is not event-scoped and is
+        // never stored in EventMembership -- it is backed by Organisation.AdminUserId.
+        // Appended last so the existing integer values in the database don't shift.
+        Admin
     }
 }

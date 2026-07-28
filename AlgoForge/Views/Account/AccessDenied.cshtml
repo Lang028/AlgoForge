@@ -1,8 +1,15 @@
 @{
-    ViewData["Title"] = "Access Denied";
+    ViewData["Title"] = "Access denied";
 }
 
-<div class="alert alert-danger">
-    <h2>@ViewData["Title"]</h2>
-    <p>You do not have access to this resource.</p>
+<div class="d-flex justify-content-center py-5">
+    <div class="gk-panel text-center" style="max-width: 460px;">
+        <div style="font-size: 2.5rem;">&#128274;</div>
+        <h2 class="fw-bold mt-2" style="color:#14141c;">Access denied</h2>
+        <p class="text-muted" style="font-size:.9rem;">
+            You don't have access to this page. Your role on each event decides what you can
+            open &mdash; if you think this is a mistake, ask the event's coordinator.
+        </p>
+        <a class="btn gk-btn-coral mt-2" asp-controller="Home" asp-action="Index">Back to dashboard</a>
+    </div>
 </div>

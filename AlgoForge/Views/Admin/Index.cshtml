@@ -1,0 +1,293 @@
+@model AlgoForge.ViewModels.Admin.AdminDashboardViewModel
+@using AlgoForge.Models
+@{
+    ViewData["Title"] = "Admin console";
+    var dayLabels = Model.UploadsLast14Days.Select(u => u.Day.ToString("dd MMM")).ToList();
+    var dayCounts = Model.UploadsLast14Days.Select(u => u.Count).ToList();
+
+    string PillClass(EventStatus s) => s switch
+    {
+        EventStatus.Live => "live",
+        EventStatus.Draft => "draft",
+        EventStatus.PostEvent => "post",
+        _ => "archived"
+    };
+}
+
+<style>
+    body {
+        background: #e9eaee;
+    }
+
+    .admin-shell {
+        background: #14141c;
+        border-radius: 24px;
+        padding: 1.5rem;
+        color: #fff;
+    }
+
+    .admin-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: .75rem;
+        padding: .25rem .5rem 1.25rem;
+    }
+
+    .admin-head h4 { font-weight: 800; margin: 0; }
+
+    .admin-badge {
+        display: inline-block;
+        background: rgba(244, 80, 42, .15);
+        color: #f4502a;
+        border: 1px solid rgba(244, 80, 42, .4);
+        border-radius: 999px;
+        font-size: .65rem;
+        font-weight: 700;
+        letter-spacing: .12em;
+        text-transform: uppercase;
+        padding: .28rem .8rem;
+        margin-left: .6rem;
+        vertical-align: middle;
+    }
+
+    .privacy-note {
+        font-size: .75rem;
+        color: rgba(255, 255, 255, .5);
+    }
+
+    .privacy-note .dot {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #7c5cfc;
+        margin-right: .4rem;
+    }
+
+    .a-card {
+        background: #1d1d28;
+        border: 1px solid rgba(255, 255, 255, .07);
+        border-radius: 18px;
+        padding: 1.1rem 1.3rem;
+        height: 100%;
+    }
+
+    .a-card h3 {
+        font-size: 1.55rem;
+        font-weight: 800;
+        margin: 0;
+        color: #fff;
+    }
+
+    .a-card small { color: rgba(255, 255, 255, .55); }
+
+    .a-card .accent-coral { color: #f4502a; }
+    .a-card .accent-violet { color: #7c5cfc; }
+
+    .a-panel {
+        background: #1d1d28;
+        border: 1px solid rgba(255, 255, 255, .07);
+        border-radius: 18px;
+        padding: 1.25rem 1.4rem;
+    }
+
+    .a-panel h6 { font-weight: 700; color: #fff; }
+
+    .admin-table {
+        font-size: .85rem;
+        color: #e5e7eb;
+        margin: 0;
+    }
+
+    .admin-table thead {
+        color: rgba(255, 255, 255, .45);
+        border-bottom: 1px solid rgba(255, 255, 255, .1);
+    }
+
+    .admin-table td,
+    .admin-table th {
+        padding: .55rem .35rem;
+        border: 0;
+        background: transparent;
+        color: inherit;
+    }
+
+    .admin-table tbody tr { border-bottom: 1px solid rgba(255, 255, 255, .05); }
+
+    .status-pill {
+        border-radius: 999px;
+        font-size: .66rem;
+        font-weight: 700;
+        letter-spacing: .05em;
+        text-transform: uppercase;
+        color: #fff;
+        padding: .25rem .65rem;
+    }
+
+    .status-pill.live { background: #f4502a; }
+    .status-pill.draft { background: #7c5cfc; }
+    .status-pill.post { background: #3a3a4a; }
+    .status-pill.archived { background: #6b7280; }
+
+    .tag-strip {
+        display: flex;
+        gap: 1rem;
+        flex-wrap: wrap;
+        font-size: .8rem;
+        color: rgba(255, 255, 255, .7);
+    }
+
+    .legend-dot {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        margin-right: .45rem;
+    }
+</style>
+
+<div class="admin-shell my-2">
+    <div class="admin-head">
+        <h4>System monitor <span class="admin-badge">Admin console</span></h4>
+        <div class="privacy-note">
+            <span class="dot"></span>Read-only overview. Personal details (names, emails, contact info) are never shown here.
+        </div>
+    </div>
+
+    <div class="row g-3">
+        <div class="col-6 col-md-3">
+            <div class="a-card">
+                <h3>@Model.TotalUsers</h3>
+                <small>Registered users</small>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="a-card">
+                <h3>@Model.TotalOrganisations</h3>
+                <small>Organisations</small>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="a-card">
+                <h3 class="accent-coral">@Model.TotalEvents</h3>
+                <small>Events</small>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="a-card">
+                <h3 class="accent-violet">@Model.TotalPhotos</h3>
+                <small>Photos uploaded</small>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mt-1">
+        <div class="col-lg-8">
+            <div class="a-panel">
+                <h6 class="mb-3">Upload activity <span class="text-secondary fw-normal">&middot; last 14 days</span></h6>
+                <canvas id="adminUploadsChart" height="110"></canvas>
+            </div>
+        </div>
+        <div class="col-lg-4">
+            <div class="a-panel h-100 d-flex flex-column justify-content-between">
+                <div>
+                    <h6 class="mb-3">Consent &amp; connections</h6>
+                    <div class="tag-strip mb-3">
+                        <span><span class="legend-dot" style="background:#e5e7eb"></span>Suggested @Model.SuggestedTags</span>
+                        <span><span class="legend-dot" style="background:#7c5cfc"></span>Confirmed @Model.ConfirmedTags</span>
+                        <span><span class="legend-dot" style="background:#f4502a"></span>Rejected @Model.RejectedTags</span>
+                    </div>
+                </div>
+                <div class="row g-2">
+                    <div class="col-4">
+                        <div class="a-card text-center"><h3>@Model.TotalTags</h3><small>Tags</small></div>
+                    </div>
+                    <div class="col-4">
+                        <div class="a-card text-center"><h3>@Model.TotalConnections</h3><small>Connected</small></div>
+                    </div>
+                    <div class="col-4">
+                        <div class="a-card text-center"><h3>@Model.PendingConnections</h3><small>Pending</small></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="a-panel mt-3">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <h6 class="mb-0">All events</h6>
+            <small class="text-secondary">@Model.TotalAttendees attendee records across the platform</small>
+        </div>
+        <div style="overflow-x:auto;">
+            <table class="table admin-table">
+                <thead>
+                    <tr>
+                        <th>Event</th>
+                        <th>Organisation</th>
+                        <th>Date</th>
+                        <th>Status</th>
+                        <th class="text-end">Photos</th>
+                        <th class="text-end">Attendees</th>
+                        <th class="text-end">Tags</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (!Model.Events.Any())
+                    {
+                        <tr><td colspan="7" class="text-secondary">No events yet.</td></tr>
+                    }
+                    @foreach (var e in Model.Events)
+                    {
+                        <tr>
+                            <td class="fw-semibold">@e.Name</td>
+                            <td>@e.OrganisationName</td>
+                            <td>@e.EventDate.ToString("dd MMM yyyy")</td>
+                            <td><span class="status-pill @PillClass(e.Status)">@e.Status</span></td>
+                            <td class="text-end">@e.PhotoCount</td>
+                            <td class="text-end">@e.AttendeeCount</td>
+                            <td class="text-end">@e.TagCount</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+    <script>
+        const dayLabels = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(dayLabels));
+        const dayCounts = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(dayCounts));
+        const barColors = dayCounts.map((_, i) => i === dayCounts.length - 1 ? '#f4502a' : '#7c5cfc');
+
+        new Chart(document.getElementById('adminUploadsChart'), {
+            type: 'bar',
+            data: {
+                labels: dayLabels,
+                datasets: [{
+                    data: dayCounts,
+                    backgroundColor: barColors,
+                    borderRadius: 6,
+                    barPercentage: 0.5
+                }]
+            },
+            options: {
+                plugins: { legend: { display: false } },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: { precision: 0, color: 'rgba(255,255,255,.5)' },
+                        grid: { color: 'rgba(255,255,255,.06)' }
+                    },
+                    x: {
+                        ticks: { color: 'rgba(255,255,255,.5)' },
+                        grid: { display: false }
+                    }
+                }
+            }
+        });
+    </script>
+}

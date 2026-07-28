@@ -2,26 +2,31 @@ using AlgoForge.Data;
 using AlgoForge.Models;
 using AlgoForge.ViewModels.Organisations;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 namespace AlgoForge.Controllers
 {
-    // NOTE: I don't have a full CRUD controller in this repo to copy wholesale --
-    // Events only has Create + Index, no Edit/Delete. This follows that file's DI
-    // and routing style as closely as possible. There's no org-level authorization
-    // policy anywhere in the app yet (RequireEventRole is per-event membership,
-    // which doesn't apply here since an Organisation doesn't have EventMemberships
-    // of its own), so this is [Authorize]-only, same ceiling as EventsController.Index.
-    // Tighten this once a real "who can manage organisations" rule exists.
+    // Anyone signed in can browse organisations and create one; Edit and Delete are
+    // gated to the organisation's admin (Organisation.AdminUserId) -- the "who can
+    // manage organisations" rule this file's original note asked for.
     [Authorize]
     public class OrganisationsController : Controller
     {
         private readonly AlgoForgeDbContext _db;
+        private readonly UserManager<ApplicationUser> _userManager;
 
-        public OrganisationsController(AlgoForgeDbContext db)
+        public OrganisationsController(AlgoForgeDbContext db, UserManager<ApplicationUser> userManager)
         {
             _db = db;
+            _userManager = userManager;
+        }
+
+        private Guid? CurrentUserId()
+        {
+            var idText = _userManager.GetUserId(User);
+            return idText is not null && Guid.TryParse(idText, out var id) ? id : null;
         }
 
         public async Task<IActionResult> Index()
@@ -31,6 +36,7 @@ namespace AlgoForge.Controllers
                 .OrderBy(o => o.Name)
                 .ToListAsync();
 
+            ViewData["CurrentUserId"] = CurrentUserId();
             return View(organisations);
         }
 
@@ -38,7 +44,8 @@ namespace AlgoForge.Controllers
         public async Task<IActionResult> Create()
         {
             await PopulateUsersAsync();
-            return View(new OrganisationFormViewModel());
+            // Default the admin to the person creating the organisation.
+            return View(new OrganisationFormViewModel { AdminUserId = CurrentUserId() ?? default });
         }
 
         [HttpPost]
@@ -83,6 +90,7 @@ namespace AlgoForge.Controllers
         {
             var organisation = await _db.Organisations.FindAsync(id);
             if (organisation is null) return NotFound();
+            if (organisation.AdminUserId != CurrentUserId()) return Forbid();
 
             var model = new OrganisationFormViewModel
             {
@@ -102,6 +110,7 @@ namespace AlgoForge.Controllers
         {
             var organisation = await _db.Organisations.FindAsync(id);
             if (organisation is null) return NotFound();
+            if (organisation.AdminUserId != CurrentUserId()) return Forbid();
 
             var duplicate = await _db.Organisations.AnyAsync(o => o.Id != id && o.Name == model.Name);
             if (duplicate)
@@ -141,6 +150,7 @@ namespace AlgoForge.Controllers
                 .Include(o => o.AdminUser)
                 .FirstOrDefaultAsync(o => o.Id == id);
             if (organisation is null) return NotFound();
+            if (organisation.AdminUserId != CurrentUserId()) return Forbid();
 
             ViewData["EventCount"] = await _db.Events.CountAsync(e => e.OrganisationId == id);
             return View(organisation);
@@ -153,6 +163,7 @@ namespace AlgoForge.Controllers
         {
             var organisation = await _db.Organisations.FindAsync(id);
             if (organisation is null) return NotFound();
+            if (organisation.AdminUserId != CurrentUserId()) return Forbid();
 
             // Belt-and-braces alongside the Restrict FK: give a clear message instead
             // of letting SaveChangesAsync throw a raw DbUpdateException.

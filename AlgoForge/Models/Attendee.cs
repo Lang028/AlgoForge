@@ -17,6 +17,10 @@ namespace AlgoForge.Models
         public string ContactInfo { get; set; } = string.Empty;
         public string InviteToken { get; set; } = string.Empty;
 
+        /// <summary>When the invite email was last successfully sent; null means never invited.
+        /// Together with ClaimedByUserId this drives the status: not invited -> invite sent -> invite accepted.</summary>
+        public DateTime? InviteSentAt { get; set; }
+
         public Guid? ClaimedByUserId { get; set; }
         public ApplicationUser? ClaimedByUser { get; set; }
 

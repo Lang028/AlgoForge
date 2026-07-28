@@ -1,0 +1,320 @@
+/* Geeked On design system — shared across every page.
+   Palette: coral #f4502a, violet #7c5cfc, ink #14141c, page bg #e9eaee. */
+
+:root {
+    --gk-coral: #f4502a;
+    --gk-coral-dark: #d84523;
+    --gk-coral-soft: #fef1ec;
+    --gk-violet: #7c5cfc;
+    --gk-ink: #14141c;
+    --gk-bg: #e9eaee;
+    --gk-muted: #6b7280;
+    --gk-faint: #9ca3af;
+    --gk-soft: #f3f4f6;
+}
+
+body {
+    background: var(--gk-bg);
+}
+
+/* ---------- top navbar ---------- */
+.gk-navbar {
+    background: var(--gk-ink) !important;
+    padding-top: .7rem;
+    padding-bottom: .7rem;
+}
+
+.gk-navbar .navbar-brand {
+    font-weight: 800;
+    letter-spacing: -.01em;
+}
+
+.gk-navbar .navbar-brand .dot {
+    color: var(--gk-coral);
+}
+
+.gk-navbar .nav-link {
+    color: rgba(255, 255, 255, .65);
+    font-weight: 500;
+    border-radius: 999px;
+    padding: .4rem 1rem;
+}
+
+.gk-navbar .nav-link:hover {
+    color: #fff;
+    background: rgba(255, 255, 255, .08);
+}
+
+.gk-navbar .btn-logout {
+    border: 0;
+    background: transparent;
+    color: rgba(255, 255, 255, .65);
+    font-weight: 500;
+    border-radius: 999px;
+    padding: .4rem 1rem;
+}
+
+.gk-navbar .btn-logout:hover {
+    color: #fff;
+    background: rgba(255, 255, 255, .08);
+}
+
+.gk-navbar .user-chip {
+    color: rgba(255, 255, 255, .85);
+    font-size: .85rem;
+    font-weight: 600;
+}
+
+.gk-navbar .user-chip .badge {
+    background: var(--gk-violet);
+    font-size: .65rem;
+}
+
+/* ---------- footer ---------- */
+.gk-footer {
+    text-align: center;
+    color: var(--gk-faint);
+    font-size: .8rem;
+    padding: 1.5rem 0 1rem;
+}
+
+/* ---------- page header (mini hero) ---------- */
+.gk-hero {
+    background: var(--gk-ink);
+    border-radius: 24px;
+    padding: 2.25rem 2.5rem;
+    color: #fff;
+    position: relative;
+    overflow: hidden;
+}
+
+.gk-hero::before,
+.gk-hero::after {
+    content: "";
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(60px);
+    opacity: .45;
+}
+
+.gk-hero::before {
+    width: 220px;
+    height: 220px;
+    background: var(--gk-coral);
+    top: -80px;
+    right: -60px;
+}
+
+.gk-hero::after {
+    width: 190px;
+    height: 190px;
+    background: var(--gk-violet);
+    bottom: -90px;
+    left: 28%;
+}
+
+.gk-hero > * {
+    position: relative;
+    z-index: 1;
+}
+
+.gk-hero h1 {
+    font-weight: 800;
+    font-size: 1.8rem;
+    margin-bottom: .25rem;
+}
+
+.gk-hero .crumb {
+    text-transform: uppercase;
+    letter-spacing: .12em;
+    font-size: .68rem;
+    color: rgba(255, 255, 255, .6);
+}
+
+.gk-hero .crumb .sep {
+    margin: 0 .35rem;
+    color: var(--gk-coral);
+}
+
+.gk-hero .hero-sub {
+    color: rgba(255, 255, 255, .65);
+    font-size: .88rem;
+    margin: .5rem 0 0;
+    max-width: 640px;
+}
+
+/* ---------- panels / cards ---------- */
+.gk-panel {
+    background: #fff;
+    border-radius: 18px;
+    padding: 1.6rem 1.75rem;
+}
+
+.gk-panel h6,
+.gk-panel .panel-title {
+    font-weight: 700;
+    color: var(--gk-ink);
+}
+
+/* ---------- buttons ---------- */
+.gk-btn-coral {
+    background: var(--gk-coral);
+    color: #fff;
+    border: 0;
+    border-radius: 999px;
+    font-weight: 600;
+    padding: .55rem 1.4rem;
+}
+
+.gk-btn-coral:hover {
+    background: var(--gk-coral-dark);
+    color: #fff;
+}
+
+.gk-btn-soft {
+    background: var(--gk-soft);
+    color: var(--gk-ink);
+    border: 0;
+    border-radius: 999px;
+    font-weight: 600;
+    padding: .55rem 1.4rem;
+}
+
+.gk-btn-soft:hover {
+    background: #e5e7eb;
+    color: var(--gk-ink);
+}
+
+.gk-btn-violet {
+    background: var(--gk-violet);
+    color: #fff;
+    border: 0;
+    border-radius: 999px;
+    font-weight: 600;
+    padding: .55rem 1.4rem;
+}
+
+.gk-btn-violet:hover {
+    background: #6a4ce8;
+    color: #fff;
+}
+
+.gk-btn-danger {
+    background: #dc3545;
+    color: #fff;
+    border: 0;
+    border-radius: 999px;
+    font-weight: 600;
+    padding: .55rem 1.4rem;
+}
+
+.gk-btn-danger:hover {
+    background: #bb2d3b;
+    color: #fff;
+}
+
+.gk-btn-sm {
+    font-size: .78rem;
+    padding: .32rem .95rem;
+}
+
+.gk-link {
+    color: var(--gk-coral);
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.gk-link:hover {
+    color: var(--gk-coral-dark);
+    text-decoration: underline;
+}
+
+/* ---------- forms (scope: .gk-form) ---------- */
+.gk-form .form-label {
+    font-size: .8rem;
+    font-weight: 600;
+    color: var(--gk-muted);
+    margin-bottom: .35rem;
+}
+
+.gk-form .form-control,
+.gk-form .form-select {
+    background: var(--gk-soft);
+    border: 1.5px solid transparent;
+    border-radius: 12px;
+    padding: .65rem .95rem;
+    font-size: .9rem;
+}
+
+.gk-form .form-control:focus,
+.gk-form .form-select:focus {
+    background: #fff;
+    border-color: var(--gk-coral);
+    box-shadow: 0 0 0 .2rem rgba(244, 80, 42, .12);
+}
+
+.gk-form .form-check-input:checked {
+    background-color: var(--gk-coral);
+    border-color: var(--gk-coral);
+}
+
+.gk-form .form-text {
+    font-size: .78rem;
+}
+
+.gk-form .text-danger {
+    font-size: .8rem;
+}
+
+/* ---------- tables ---------- */
+.gk-table {
+    font-size: .88rem;
+    margin: 0;
+}
+
+.gk-table thead {
+    color: var(--gk-faint);
+    font-weight: 500;
+    border-bottom: 1px solid #f0f0f2;
+}
+
+.gk-table td,
+.gk-table th {
+    padding: .65rem .4rem;
+    border: 0;
+    vertical-align: middle;
+}
+
+.gk-table tbody tr {
+    border-bottom: 1px solid #f7f7f9;
+}
+
+/* ---------- status pills & badges ---------- */
+.gk-pill {
+    display: inline-block;
+    border-radius: 999px;
+    font-size: .68rem;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: #fff;
+    padding: .28rem .7rem;
+}
+
+.gk-pill.live,
+.gk-pill.coral { background: var(--gk-coral); }
+
+.gk-pill.draft,
+.gk-pill.violet { background: var(--gk-violet); }
+
+.gk-pill.post,
+.gk-pill.dark { background: var(--gk-ink); }
+
+.gk-pill.archived,
+.gk-pill.grey { background: var(--gk-faint); }
+
+/* ---------- alerts ---------- */
+.alert {
+    border-radius: 14px;
+    border: 0;
+}

@@ -2,9 +2,17 @@
     ViewData["Title"] = "About";
 }
 
-<main aria-labelledby="title">
-    <h2 id="title">@ViewData["Title"]</h2>
-    <h3>@ViewBag.Message</h3>
+<div class="gk-hero my-2">
+    <h1>About Geeked On</h1>
+    <div class="crumb">Geeked On <span class="sep">&rsaquo;</span> About</div>
+    <p class="hero-sub">@ViewBag.Message</p>
+</div>
 
-    <p>Geeked On is built by AlgoForge &mdash; Group 12, Application Development, Durban University of Technology, as a Demo Day project.</p>
-</main>
+<div class="gk-panel mt-3" style="max-width: 720px;">
+    <p class="mb-0">
+        Geeked On is built by <strong>AlgoForge</strong> &mdash; Group 12, Application Development,
+        Durban University of Technology, as a Demo Day project. It turns event photo galleries into
+        a consent-based networking layer: faces are grouped automatically, every tag is approved by
+        the person it belongs to, and contact details are only shared when both people agree.
+    </p>
+</div>

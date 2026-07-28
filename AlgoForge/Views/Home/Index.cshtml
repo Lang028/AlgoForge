@@ -1,8 +1,17 @@
 @model AlgoForge.ViewModels.Home.DashboardViewModel
+@using AlgoForge.Models
 @{
     ViewData["Title"] = "Dashboard";
-    var userName = (User.Identity?.IsAuthenticated ?? false) ? User.Identity!.Name : "Guest";
-    var userInitial = string.IsNullOrEmpty(userName) ? "G" : userName![0].ToString().ToUpper();
+
+    var role = Model.ActiveRole;
+    // No claim (older cookie) falls back to the full coordinator-style view.
+    var isAdmin = role == EventRole.Admin;
+    var isCoordinator = role is EventRole.Coordinator or null;
+    var isPhotographer = role == EventRole.Photographer;
+    var isAttendeeSide = role is EventRole.Attendee or EventRole.Delegate;
+
+    var userInitial = string.IsNullOrEmpty(Model.UserDisplayName)
+        ? "?" : Model.UserDisplayName[0].ToString().ToUpper();
     var dayLabels = Model.UploadsLast7Days.Select(u => u.Day.ToString("ddd")).ToList();
     var dayCounts = Model.UploadsLast7Days.Select(u => u.Count).ToList();
 }
@@ -40,6 +49,19 @@
         margin: 0 auto .5rem;
     }
 
+    .role-chip {
+        display: inline-block;
+        background: #fef1ec;
+        color: #f4502a;
+        border-radius: 999px;
+        font-size: .7rem;
+        font-weight: 700;
+        letter-spacing: .05em;
+        text-transform: uppercase;
+        padding: .25rem .7rem;
+        margin-top: .35rem;
+    }
+
     .dash-nav .nav-link {
         color: #6b7280;
         border-radius: 12px;
@@ -59,6 +81,16 @@
     .dash-nav .nav-link:hover {
         color: #111;
         background: #f3f4f6;
+    }
+
+    .dash-nav .badge-pending {
+        background: #f4502a;
+        color: #fff;
+        border-radius: 999px;
+        font-size: .65rem;
+        font-weight: 700;
+        padding: .2rem .5rem;
+        margin-left: auto;
     }
 
     .side-cta {
@@ -165,7 +197,10 @@
         font-weight: 600;
         color: #fff;
         margin-bottom: .65rem;
+        text-decoration: none;
     }
+
+    .event-pill:hover { color: #fff; opacity: .88; }
 
     .event-pill.live { background: #f4502a; }
     .event-pill.draft { background: #7c5cfc; }
@@ -196,7 +231,51 @@
 
     .donut-center strong { font-size: 1.35rem; }
     .donut-center span { font-size: .75rem; color: #9ca3af; }
+
+    .big-number {
+        font-size: 2.4rem;
+        font-weight: 800;
+        color: #f4502a;
+        line-height: 1;
+    }
+
+    .btn-coral-sm {
+        background: #f4502a;
+        color: #fff;
+        border-radius: 999px;
+        font-size: .78rem;
+        font-weight: 600;
+        padding: .35rem .95rem;
+        border: 0;
+    }
+
+    .btn-coral-sm:hover { background: #d84523; color: #fff; }
+
+    .btn-soft-sm {
+        background: #f3f4f6;
+        color: #14141c;
+        border-radius: 999px;
+        font-size: .78rem;
+        font-weight: 600;
+        padding: .35rem .95rem;
+        border: 0;
+    }
+
+    .btn-soft-sm:hover { background: #e5e7eb; color: #14141c; }
 </style>
+
+@if (TempData["InfoMessage"] is string info)
+{
+    <div class="alert alert-warning rounded-4 my-2">@info</div>
+}
+@if (TempData["SuccessMessage"] is string success)
+{
+    <div class="alert alert-success rounded-4 my-2">@success</div>
+}
+@if (TempData["ErrorMessage"] is string error)
+{
+    <div class="alert alert-danger rounded-4 my-2">@error</div>
+}
 
 <div class="dash-shell my-2">
     <div class="row g-3">
@@ -205,25 +284,52 @@
         <div class="col-lg-3 dash-sidebar d-flex flex-column gap-3">
             <div class="side-card text-center">
                 <div class="dash-avatar">@userInitial</div>
-                <div class="fw-bold">@userName</div>
-                <small class="text-muted">Geeked On member</small>
+                <div class="fw-bold">@Model.UserDisplayName</div>
+                <div class="role-chip">@(role?.ToString() ?? "Member")</div>
             </div>
 
             <div class="side-card flex-grow-1">
                 <nav class="dash-nav nav flex-column gap-1">
                     <a class="nav-link active" asp-controller="Home" asp-action="Index">&#9632; Dashboard</a>
                     <a class="nav-link" asp-controller="Events" asp-action="Index">&#128197; Events</a>
-                    <a class="nav-link" asp-controller="Photos" asp-action="Index">&#128247; Photos</a>
-                    <a class="nav-link" asp-controller="Connections" asp-action="Index">&#129309; Connections</a>
-                    <a class="nav-link" asp-controller="Tags" asp-action="Index">&#127991; Tags</a>
+                    @if (isCoordinator || isAdmin)
+                    {
+                        <a class="nav-link" asp-controller="Organisations" asp-action="Index">&#127970; Organisations</a>
+                    }
+                    <a class="nav-link" asp-controller="Connections" asp-action="Index">
+                        &#129309; Connections
+                        @if (Model.PendingConnectionRequests > 0)
+                        {
+                            <span class="badge-pending">@Model.PendingConnectionRequests</span>
+                        }
+                    </a>
                 </nav>
             </div>
 
-            <div class="side-cta">
-                <div class="fw-bold mb-1">Hosting an event?</div>
-                <small class="d-block mb-3" style="opacity:.7">Create it and invite your attendees.</small>
-                <a class="btn btn-sm px-3" asp-controller="Events" asp-action="Create">Create event</a>
-            </div>
+            @if (isAdmin)
+            {
+                <div class="side-cta">
+                    <div class="fw-bold mb-1">Running an organisation?</div>
+                    <small class="d-block mb-3" style="opacity:.7">Create it here &mdash; every event is hosted under one.</small>
+                    <a class="btn btn-sm px-3" asp-controller="Organisations" asp-action="Create">Create organisation</a>
+                </div>
+            }
+            else if (isAttendeeSide)
+            {
+                <div class="side-cta">
+                    <div class="fw-bold mb-1">Tagged in photos?</div>
+                    <small class="d-block mb-3" style="opacity:.7">Open your event galleries and review the tags waiting for you.</small>
+                    <a class="btn btn-sm px-3" asp-controller="Events" asp-action="Index">My events</a>
+                </div>
+            }
+            else
+            {
+                <div class="side-cta">
+                    <div class="fw-bold mb-1">Hosting an event?</div>
+                    <small class="d-block mb-3" style="opacity:.7">Create it and invite your attendees.</small>
+                    <a class="btn btn-sm px-3" asp-controller="Events" asp-action="Create">Create event</a>
+                </div>
+            }
         </div>
 
         <!-- ============ Main column ============ -->
@@ -236,75 +342,193 @@
             <div class="row g-3">
                 <div class="col-sm-4">
                     <div class="stat-card">
-                        <div class="stat-icon">&#128197;</div>
-                        <h3>@Model.TotalEvents</h3>
-                        <small>Events</small>
+                        @if (isAdmin)
+                        {
+                            <div class="stat-icon">&#127970;</div>
+                            <h3>@Model.MyOrganisations.Count</h3>
+                            <small>My organisations</small>
+                        }
+                        else
+                        {
+                            <div class="stat-icon">&#128197;</div>
+                            <h3>@Model.TotalEvents</h3>
+                            <small>@(isAttendeeSide ? "My events" : "Events")</small>
+                        }
                     </div>
                 </div>
                 <div class="col-sm-4">
                     <div class="stat-card coral">
-                        <div class="stat-icon">&#128247;</div>
-                        <h3>@Model.TotalPhotos</h3>
-                        <small>Photos uploaded</small>
+                        @if (isAdmin)
+                        {
+                            <div class="stat-icon">&#128197;</div>
+                            <h3>@Model.TotalEvents</h3>
+                            <small>Events hosted</small>
+                        }
+                        else
+                        {
+                            <div class="stat-icon">&#128247;</div>
+                            <h3>@Model.TotalPhotos</h3>
+                            <small>@(isPhotographer ? "Photos uploaded" : "Photos")</small>
+                        }
                     </div>
                 </div>
                 <div class="col-sm-4">
                     <div class="stat-card violet">
-                        <div class="stat-icon">&#128101;</div>
-                        <h3>@Model.TotalAttendees</h3>
-                        <small>Attendees</small>
+                        @if (isAttendeeSide)
+                        {
+                            <div class="stat-icon">&#127991;</div>
+                            <h3>@Model.TotalTags</h3>
+                            <small>My tags</small>
+                        }
+                        else
+                        {
+                            <div class="stat-icon">&#128101;</div>
+                            <h3>@Model.TotalAttendees</h3>
+                            <small>Attendees</small>
+                        }
                     </div>
                 </div>
             </div>
 
             <div class="panel">
                 <div class="d-flex justify-content-between align-items-center">
-                    <h6 class="mb-0">Photo uploads <span class="text-muted fw-normal">&middot; last 7 days</span></h6>
-                    <small class="text-muted">@Model.TotalConnections accepted connections</small>
+                    <h6 class="mb-0">
+                        @(isAttendeeSide ? "Gallery activity" : "Photo uploads")
+                        <span class="text-muted fw-normal">&middot; last 7 days</span>
+                    </h6>
+                    <small class="text-muted">@Model.TotalConnections connections</small>
                 </div>
                 <canvas id="uploadsChart" height="130" class="mt-3"></canvas>
             </div>
 
-            <div class="panel">
-                <div class="d-flex justify-content-between align-items-center mb-2">
-                    <h6 class="mb-0">Recent attendees</h6>
-                    <a class="view-all" asp-controller="Events" asp-action="Index">View all</a>
-                </div>
-                <table class="table dash-table mb-0">
-                    <thead>
-                        <tr>
-                            <th>Name</th>
-                            <th>Event</th>
-                            <th>Status</th>
-                            <th>Event date</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @if (!Model.RecentAttendees.Any())
-                        {
-                            <tr><td colspan="4" class="text-muted">No attendees yet.</td></tr>
-                        }
-                        @foreach (var a in Model.RecentAttendees)
-                        {
+            @if (isAdmin)
+            {
+                <div class="panel">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h6 class="mb-0">My organisations</h6>
+                        <a class="view-all" asp-controller="Organisations" asp-action="Index">View all</a>
+                    </div>
+                    <table class="table dash-table mb-0">
+                        <thead>
                             <tr>
-                                <td class="fw-semibold">@a.Name</td>
-                                <td>@a.EventName</td>
-                                <td>
-                                    @if (a.Claimed)
-                                    {
-                                        <span class="badge rounded-pill" style="background:#7c5cfc">Claimed</span>
-                                    }
-                                    else
-                                    {
-                                        <span class="badge rounded-pill bg-secondary">Invited</span>
-                                    }
-                                </td>
-                                <td>@a.EventDate.ToString("dd MMM yyyy")</td>
+                                <th>Name</th>
+                                <th>Contact</th>
+                                <th>Events</th>
+                                <th></th>
                             </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
+                        </thead>
+                        <tbody>
+                            @if (!Model.MyOrganisations.Any())
+                            {
+                                <tr><td colspan="4" class="text-muted">You don't administer any organisation yet.</td></tr>
+                            }
+                            @foreach (var org in Model.MyOrganisations)
+                            {
+                                <tr>
+                                    <td class="fw-semibold">@org.Name</td>
+                                    <td>@org.ContactEmail</td>
+                                    <td>@org.EventCount</td>
+                                    <td class="text-end">
+                                        <a class="btn btn-soft-sm" asp-controller="Organisations" asp-action="Edit" asp-route-id="@org.Id">Manage</a>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+            else if (isCoordinator)
+            {
+                <div class="panel">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h6 class="mb-0">Recent attendees</h6>
+                        <a class="view-all" asp-controller="Events" asp-action="Index">View all</a>
+                    </div>
+                    <table class="table dash-table mb-0">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Event</th>
+                                <th>Status</th>
+                                <th>Event date</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (!Model.RecentAttendees.Any())
+                            {
+                                <tr><td colspan="4" class="text-muted">No attendees yet.</td></tr>
+                            }
+                            @foreach (var a in Model.RecentAttendees)
+                            {
+                                <tr>
+                                    <td class="fw-semibold">@a.Name</td>
+                                    <td>@a.EventName</td>
+                                    <td>
+                                        @if (a.Claimed)
+                                        {
+                                            <span class="badge rounded-pill" style="background:#7c5cfc">Claimed</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge rounded-pill bg-secondary">Invited</span>
+                                        }
+                                    </td>
+                                    <td>@a.EventDate.ToString("dd MMM yyyy")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+            else if (isPhotographer)
+            {
+                <div class="panel">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h6 class="mb-0">Your events</h6>
+                        <a class="view-all" asp-controller="Events" asp-action="Index">View all</a>
+                    </div>
+                    @if (!Model.UpcomingEvents.Any())
+                    {
+                        <small class="text-muted">No draft or live events. Uploads open while an event is Live.</small>
+                    }
+                    @foreach (var e in Model.UpcomingEvents)
+                    {
+                        <div class="d-flex align-items-center justify-content-between mb-2">
+                            <div>
+                                <div class="fw-semibold" style="font-size:.9rem;">@e.Name</div>
+                                <small class="text-muted">@e.EventDate.ToString("dd MMM yyyy") &middot; @e.Status</small>
+                            </div>
+                            <div class="d-flex gap-2">
+                                <a class="btn btn-coral-sm" asp-controller="Photos" asp-action="Upload" asp-route-eventId="@e.Id">Upload</a>
+                                <a class="btn btn-soft-sm" asp-controller="Photos" asp-action="Index" asp-route-eventId="@e.Id">Gallery</a>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="panel">
+                    <h6>Tags waiting for your review</h6>
+                    <div class="d-flex align-items-center gap-3 mb-3">
+                        <div class="big-number">@Model.SuggestedTags</div>
+                        <small class="text-muted">
+                            suggested tag@(Model.SuggestedTags == 1 ? "" : "s") of you
+                            haven't been confirmed or rejected yet. Nothing goes public without your say-so.
+                        </small>
+                    </div>
+                    <div class="d-flex gap-2 flex-wrap">
+                        <a class="btn btn-coral-sm" asp-controller="Events" asp-action="Index">Review in my events</a>
+                        <a class="btn btn-soft-sm" asp-controller="Connections" asp-action="Index">
+                            Connections
+                            @if (Model.PendingConnectionRequests > 0)
+                            {
+                                <span>(@Model.PendingConnectionRequests pending)</span>
+                            }
+                        </a>
+                    </div>
+                </div>
+            }
         </div>
 
         <!-- ============ Right column ============ -->
@@ -318,9 +542,10 @@
                 @foreach (var e in Model.UpcomingEvents)
                 {
                     <div>
-                        <span class="event-pill @(e.Status == AlgoForge.Models.EventStatus.Live ? "live" : "draft")">
+                        <a class="event-pill @(e.Status == EventStatus.Live ? "live" : "draft")"
+                           asp-controller="Photos" asp-action="Index" asp-route-eventId="@e.Id">
                             @e.Name
-                        </span>
+                        </a>
                         <div class="text-muted mb-2" style="font-size:.75rem; margin-top:-.35rem;">
                             @e.EventDate.ToString("dd MMM yyyy") &middot; @e.Status
                         </div>
@@ -329,7 +554,7 @@
             </div>
 
             <div class="panel flex-grow-1">
-                <h6>Tag consent</h6>
+                <h6>@(isAttendeeSide ? "Your tags" : "Tag consent")</h6>
                 <div class="donut-wrap">
                     <canvas id="tagsChart" width="170" height="170"></canvas>
                     <div class="donut-center">

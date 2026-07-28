@@ -1,50 +1,257 @@
 @model AlgoForge.ViewModels.Account.RegisterViewModel
 
 @{
-    ViewData["Title"] = "Register";
+    ViewData["Title"] = "Create account";
 }
 
-<div class="row justify-content-center">
-    <div class="col-md-6">
-        <h2>@ViewData["Title"]</h2>
-        <hr />
-        <form method="post">
-            <div asp-validation-summary="All" class="text-danger"></div>
+<style>
+    body {
+        background: #e9eaee;
+    }
 
-            <div class="mb-3">
-                <label asp-for="DisplayName" class="form-label"></label>
-                <input asp-for="DisplayName" class="form-control" />
-                <span asp-validation-for="DisplayName" class="text-danger"></span>
+    .auth-wrap {
+        display: flex;
+        justify-content: center;
+        padding: 2.5rem 0 3.5rem;
+    }
+
+    .auth-card {
+        display: flex;
+        width: 100%;
+        max-width: 900px;
+        background: #fff;
+        border-radius: 24px;
+        overflow: hidden;
+        box-shadow: 0 20px 60px rgba(20, 20, 28, .14);
+    }
+
+    /* ---------- brand panel ---------- */
+    .auth-brand {
+        flex: 1 1 42%;
+        background: #14141c;
+        color: #fff;
+        padding: 3rem 2.5rem;
+        position: relative;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+    }
+
+    .auth-brand::before,
+    .auth-brand::after {
+        content: "";
+        position: absolute;
+        border-radius: 50%;
+        filter: blur(70px);
+        opacity: .5;
+    }
+
+    .auth-brand::before {
+        width: 240px;
+        height: 240px;
+        background: #7c5cfc;
+        top: -70px;
+        right: -70px;
+    }
+
+    .auth-brand::after {
+        width: 220px;
+        height: 220px;
+        background: #f4502a;
+        bottom: -80px;
+        left: -60px;
+    }
+
+    .auth-brand > * { position: relative; z-index: 1; }
+
+    .auth-logo {
+        font-weight: 800;
+        font-size: 1.35rem;
+        letter-spacing: -.01em;
+    }
+
+    .auth-logo .dot { color: #f4502a; }
+
+    .auth-brand h2 {
+        font-weight: 800;
+        font-size: 1.7rem;
+        line-height: 1.3;
+        margin: 0 0 .75rem;
+    }
+
+    .auth-brand p {
+        color: rgba(255, 255, 255, .65);
+        font-size: .9rem;
+        margin: 0;
+    }
+
+    .auth-points {
+        list-style: none;
+        padding: 0;
+        margin: 1.5rem 0 0;
+        font-size: .85rem;
+        color: rgba(255, 255, 255, .8);
+    }
+
+    .auth-points li {
+        display: flex;
+        gap: .6rem;
+        align-items: baseline;
+        margin-bottom: .6rem;
+    }
+
+    .auth-points li::before {
+        content: "\2713";
+        color: #7c5cfc;
+        font-weight: 700;
+    }
+
+    /* ---------- form panel ---------- */
+    .auth-form {
+        flex: 1 1 58%;
+        padding: 3rem 2.75rem;
+    }
+
+    .auth-form h1 {
+        font-weight: 800;
+        font-size: 1.6rem;
+        margin-bottom: .35rem;
+        color: #14141c;
+    }
+
+    .auth-form .sub {
+        color: #9ca3af;
+        font-size: .88rem;
+        margin-bottom: 1.75rem;
+    }
+
+    .auth-form .form-label {
+        font-size: .8rem;
+        font-weight: 600;
+        color: #6b7280;
+        margin-bottom: .35rem;
+    }
+
+    .auth-form .form-control {
+        background: #f3f4f6;
+        border: 1.5px solid transparent;
+        border-radius: 12px;
+        padding: .7rem .95rem;
+        font-size: .9rem;
+    }
+
+    .auth-form .form-control:focus {
+        background: #fff;
+        border-color: #7c5cfc;
+        box-shadow: 0 0 0 .2rem rgba(124, 92, 252, .12);
+    }
+
+    .btn-auth {
+        background: #f4502a;
+        color: #fff;
+        border: 0;
+        border-radius: 999px;
+        font-weight: 700;
+        padding: .7rem 1rem;
+        width: 100%;
+        transition: background .15s;
+    }
+
+    .btn-auth:hover { background: #d84523; color: #fff; }
+
+    .auth-note {
+        background: #f7f7f9;
+        border-radius: 12px;
+        padding: .75rem .95rem;
+        font-size: .78rem;
+        color: #6b7280;
+        margin-bottom: 1.25rem;
+    }
+
+    .auth-alt {
+        text-align: center;
+        font-size: .85rem;
+        color: #6b7280;
+        margin-top: 1.5rem;
+    }
+
+    .auth-alt a {
+        color: #f4502a;
+        font-weight: 600;
+        text-decoration: none;
+    }
+
+    .auth-alt a:hover { text-decoration: underline; }
+
+    .text-danger { font-size: .8rem; }
+
+    @@media (max-width: 767px) {
+        .auth-brand { display: none; }
+        .auth-form { padding: 2rem 1.5rem; }
+    }
+</style>
+
+<div class="auth-wrap">
+    <div class="auth-card">
+        <div class="auth-brand">
+            <div class="auth-logo">Geeked On<span class="dot">.</span></div>
+            <div>
+                <h2>Join the network behind the photos.</h2>
+                <p>One account is all you need &mdash; host events, shoot them, or claim your own photos.</p>
+                <ul class="auth-points">
+                    <li>Create an event of your own</li>
+                    <li>Open invitation links sent to you</li>
+                    <li>You decide which tags go public</li>
+                </ul>
             </div>
+            <p style="font-size:.75rem;">AlgoForge (Group 12) &middot; Durban University of Technology</p>
+        </div>
 
-            <div class="mb-3">
-                <label asp-for="Email" class="form-label"></label>
-                <input asp-for="Email" class="form-control" />
-                <span asp-validation-for="Email" class="text-danger"></span>
+        <div class="auth-form">
+            <h1>Create account</h1>
+            <div class="sub">It takes less than a minute.</div>
+
+            <form method="post">
+                <div asp-validation-summary="All" class="text-danger mb-2"></div>
+
+                <div class="mb-3">
+                    <label asp-for="DisplayName" class="form-label"></label>
+                    <input asp-for="DisplayName" class="form-control" placeholder="Your full name" />
+                    <span asp-validation-for="DisplayName" class="text-danger"></span>
+                </div>
+
+                <div class="mb-3">
+                    <label asp-for="Email" class="form-label"></label>
+                    <input asp-for="Email" class="form-control" placeholder="you@example.com" />
+                    <span asp-validation-for="Email" class="text-danger"></span>
+                </div>
+
+                <div class="row">
+                    <div class="col-sm-6 mb-3">
+                        <label asp-for="Password" class="form-label"></label>
+                        <input asp-for="Password" class="form-control" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;" />
+                        <span asp-validation-for="Password" class="text-danger"></span>
+                    </div>
+                    <div class="col-sm-6 mb-3">
+                        <label asp-for="ConfirmPassword" class="form-label"></label>
+                        <input asp-for="ConfirmPassword" class="form-control" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;" />
+                        <span asp-validation-for="ConfirmPassword" class="text-danger"></span>
+                    </div>
+                </div>
+
+                <div class="auth-note">
+                    Once you have an account you can create an event of your own, or open an
+                    invitation link someone has emailed you.
+                </div>
+
+                <button type="submit" class="btn-auth">Create account</button>
+            </form>
+
+            <div class="auth-alt">
+                Already have an account? <a asp-action="Login">Sign in</a>
             </div>
-
-            <div class="mb-3">
-                <label asp-for="Password" class="form-label"></label>
-                <input asp-for="Password" class="form-control" />
-                <span asp-validation-for="Password" class="text-danger"></span>
-            </div>
-
-            <div class="mb-3">
-                <label asp-for="ConfirmPassword" class="form-label"></label>
-                <input asp-for="ConfirmPassword" class="form-control" />
-                <span asp-validation-for="ConfirmPassword" class="text-danger"></span>
-            </div>
-
-            <p class="text-muted small">
-                Once you have an account you can create an event of your own, or open an
-                invitation link someone has emailed you.
-            </p>
-
-            <button type="submit" class="btn btn-primary">Register</button>
-        </form>
-        <p>
-            <a asp-action="Login">Already have an account? Sign in</a>
-        </p>
+        </div>
     </div>
 </div>
 

@@ -4,33 +4,38 @@
     var eventCount = (int)(ViewData["EventCount"] ?? 0);
 }
 
-<h2>Delete organisation</h2>
-
-<div class="alert alert-danger">
-    Are you sure you want to delete <strong>@Model.Name</strong>? This can't be undone.
+<div class="gk-hero my-2">
+    <h1>Delete organisation</h1>
+    <div class="crumb">Geeked On <span class="sep">&rsaquo;</span> Organisations <span class="sep">&rsaquo;</span> Delete</div>
 </div>
 
-@if (eventCount > 0)
-{
-    <div class="alert alert-warning">
-        This organisation has @eventCount event(s) attached and can't be deleted until they're
-        reassigned or removed.
+<div class="gk-panel mt-3" style="max-width: 560px;">
+    <div class="alert alert-danger">
+        Are you sure you want to delete <strong>@Model.Name</strong>? This can't be undone.
     </div>
-}
 
-<dl class="row">
-    <dt class="col-sm-3">Name</dt>
-    <dd class="col-sm-9">@Model.Name</dd>
+    @if (eventCount > 0)
+    {
+        <div class="alert alert-warning">
+            This organisation has @eventCount event(s) attached and can't be deleted until they're
+            reassigned or removed.
+        </div>
+    }
 
-    <dt class="col-sm-3">Contact email</dt>
-    <dd class="col-sm-9">@Model.ContactEmail</dd>
+    <dl class="row mb-4" style="font-size:.9rem;">
+        <dt class="col-sm-4 text-muted fw-normal">Name</dt>
+        <dd class="col-sm-8 fw-semibold">@Model.Name</dd>
 
-    <dt class="col-sm-3">Admin</dt>
-    <dd class="col-sm-9">@(Model.AdminUser?.DisplayName ?? "—")</dd>
-</dl>
+        <dt class="col-sm-4 text-muted fw-normal">Contact email</dt>
+        <dd class="col-sm-8">@Model.ContactEmail</dd>
 
-<form asp-action="Delete" method="post">
-    <input type="hidden" asp-for="Id" />
-    <button type="submit" class="btn btn-danger" @(eventCount > 0 ? "disabled" : "")>Delete</button>
-    <a asp-action="Index" class="btn btn-link">Cancel</a>
-</form>
+        <dt class="col-sm-4 text-muted fw-normal">Admin</dt>
+        <dd class="col-sm-8">@(Model.AdminUser?.DisplayName ?? "—")</dd>
+    </dl>
+
+    <form asp-action="Delete" method="post" class="d-flex gap-2">
+        <input type="hidden" asp-for="Id" />
+        <button type="submit" class="btn gk-btn-danger" @(eventCount > 0 ? "disabled" : "")>Delete organisation</button>
+        <a asp-action="Index" class="btn gk-btn-soft">Cancel</a>
+    </form>
+</div>

@@ -20,95 +20,151 @@
     var accepted = Model.Where(c => c.Status == AlgoForge.Models.ConnectionStatus.Accepted).ToList();
 }
 
-<h2>My connections</h2>
-<p class="text-muted">A connection shares contact details, nothing else. Event photos stay visible to every member either way.</p>
+<style>
+    .conn-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: .85rem 0;
+        border-bottom: 1px solid #f0f0f2;
+        flex-wrap: wrap;
+    }
+
+    .conn-row:last-child { border-bottom: 0; }
+
+    .conn-avatar {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #7c5cfc, #f4502a);
+        color: #fff;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+    .conn-name { font-weight: 600; color: #14141c; }
+
+    .conn-meta { font-size: .8rem; color: #9ca3af; }
+
+    .count-chip {
+        background: #fef1ec;
+        color: #f4502a;
+        border-radius: 999px;
+        font-size: .72rem;
+        font-weight: 700;
+        padding: .2rem .6rem;
+        vertical-align: middle;
+    }
+</style>
+
+<div class="gk-hero my-2">
+    <h1>My connections</h1>
+    <div class="crumb">Geeked On <span class="sep">&rsaquo;</span> Connections</div>
+    <p class="hero-sub">A connection shares contact details, nothing else. Event photos stay visible to every member either way.</p>
+</div>
 
 @if (TempData["SuccessMessage"] is string success)
 {
-    <div class="alert alert-success">@success</div>
+    <div class="alert alert-success mt-3">@success</div>
 }
 @if (TempData["ErrorMessage"] is string error)
 {
-    <div class="alert alert-warning">@error</div>
+    <div class="alert alert-warning mt-3">@error</div>
 }
 
-<h4 class="mt-4">Waiting on you (@incoming.Count)</h4>
-@if (!incoming.Any())
-{
-    <p class="text-muted">Nothing to respond to.</p>
-}
-else
-{
-    <ul class="list-group mb-3">
-        @foreach (var c in incoming)
-        {
-            <li class="list-group-item d-flex justify-content-between align-items-center">
-                <span>
-                    <strong>@NameOf(c)</strong>
-                    @if (c.MetAtEvent is not null)
-                    {
-                        <span class="text-muted">&mdash; met at @c.MetAtEvent.Name</span>
-                    }
-                </span>
-                <span class="d-flex gap-2">
-                    <form method="post" asp-action="Accept" asp-route-connectionId="@c.Id">
-                        <button type="submit" class="btn btn-sm btn-primary">Accept</button>
-                    </form>
-                    <form method="post" asp-action="Decline" asp-route-connectionId="@c.Id">
-                        <button type="submit" class="btn btn-sm btn-outline-secondary">Decline</button>
-                    </form>
-                </span>
-            </li>
-        }
-    </ul>
-}
-
-<h4 class="mt-4">Sent (@outgoing.Count)</h4>
-@if (!outgoing.Any())
-{
-    <p class="text-muted">No pending requests.</p>
-}
-else
-{
-    <ul class="list-group mb-3">
-        @foreach (var c in outgoing)
-        {
-            <li class="list-group-item">
-                <strong>@NameOf(c)</strong>
-                <span class="badge bg-secondary">Awaiting response</span>
-            </li>
-        }
-    </ul>
-}
-
-<h4 class="mt-4">Connected (@accepted.Count)</h4>
-@if (!accepted.Any())
-{
-    <p class="text-muted">No connections yet. Open an event gallery and click a face to reach out.</p>
-}
-else
-{
-    <ul class="list-group">
-        @foreach (var c in accepted)
-        {
-            var contact = ContactFor(c.OtherUserId(viewerId));
-            <li class="list-group-item">
-                <strong>@NameOf(c)</strong>
-                @if (c.MetAtEvent is not null)
-                {
-                    <span class="text-muted">&mdash; met at @c.MetAtEvent.Name</span>
-                }
-                @if (contact is not null)
-                {
-                    <div class="small mt-1">
-                        <a href="mailto:@contact.Email">@contact.Email</a>
-                        @if (!string.IsNullOrWhiteSpace(contact.ContactInfo))
-                        {
-                            <span class="text-muted">&middot; @contact.ContactInfo</span>
-                        }
+<div class="row g-3 mt-1">
+    <div class="col-lg-6">
+        <div class="gk-panel h-100">
+            <h6>Waiting on you <span class="count-chip">@incoming.Count</span></h6>
+            @if (!incoming.Any())
+            {
+                <p class="text-muted mb-0" style="font-size:.88rem;">Nothing to respond to.</p>
+            }
+            @foreach (var c in incoming)
+            {
+                <div class="conn-row">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="conn-avatar">@NameOf(c)[0]</div>
+                        <div>
+                            <div class="conn-name">@NameOf(c)</div>
+                            @if (c.MetAtEvent is not null)
+                            {
+                                <div class="conn-meta">Met at @c.MetAtEvent.Name</div>
+                            }
+                        </div>
                     </div>
-                }
-            </li>
-        }
-    </ul>
-}
+                    <div class="d-flex gap-2">
+                        <form method="post" asp-action="Accept" asp-route-connectionId="@c.Id">
+                            <button type="submit" class="btn gk-btn-coral gk-btn-sm">Accept</button>
+                        </form>
+                        <form method="post" asp-action="Decline" asp-route-connectionId="@c.Id">
+                            <button type="submit" class="btn gk-btn-soft gk-btn-sm">Decline</button>
+                        </form>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        <div class="gk-panel h-100">
+            <h6>Sent <span class="count-chip">@outgoing.Count</span></h6>
+            @if (!outgoing.Any())
+            {
+                <p class="text-muted mb-0" style="font-size:.88rem;">No pending requests.</p>
+            }
+            @foreach (var c in outgoing)
+            {
+                <div class="conn-row">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="conn-avatar">@NameOf(c)[0]</div>
+                        <div class="conn-name">@NameOf(c)</div>
+                    </div>
+                    <span class="gk-pill grey">Awaiting response</span>
+                </div>
+            }
+        </div>
+    </div>
+
+    <div class="col-12">
+        <div class="gk-panel">
+            <h6>Connected <span class="count-chip">@accepted.Count</span></h6>
+            @if (!accepted.Any())
+            {
+                <p class="text-muted mb-0" style="font-size:.88rem;">
+                    No connections yet. Open an event gallery and click a face to reach out.
+                </p>
+            }
+            @foreach (var c in accepted)
+            {
+                var contact = ContactFor(c.OtherUserId(viewerId));
+                <div class="conn-row">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="conn-avatar">@NameOf(c)[0]</div>
+                        <div>
+                            <div class="conn-name">@NameOf(c)</div>
+                            @if (c.MetAtEvent is not null)
+                            {
+                                <div class="conn-meta">Met at @c.MetAtEvent.Name</div>
+                            }
+                        </div>
+                    </div>
+                    @if (contact is not null)
+                    {
+                        <div style="font-size:.85rem;">
+                            <a class="gk-link" href="mailto:@contact.Email">@contact.Email</a>
+                            @if (!string.IsNullOrWhiteSpace(contact.ContactInfo))
+                            {
+                                <span class="text-muted">&middot; @contact.ContactInfo</span>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+</div>

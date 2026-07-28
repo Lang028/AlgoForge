@@ -5,48 +5,54 @@
     var eventName = ViewData["EventName"];
 }
 
-<h2>Upload photos to @eventName</h2>
+<div class="gk-hero my-2">
+    <h1>Upload photos</h1>
+    <div class="crumb">Geeked On <span class="sep">&rsaquo;</span> @eventName <span class="sep">&rsaquo;</span> Upload</div>
+    <p class="hero-sub">Add photos one by one or drop in a whole folder &mdash; faces are detected and grouped automatically after upload.</p>
+</div>
 
 @if (TempData["ErrorMessage"] is string error)
 {
-    <div class="alert alert-danger">@error</div>
+    <div class="alert alert-danger mt-3">@error</div>
 }
 
 @* Posts as one request with no JavaScript, which is the fallback path. With JavaScript
    the same inputs are intercepted and uploaded in batches -- see the script below. *@
-<form method="post" enctype="multipart/form-data" asp-action="Upload" asp-route-eventId="@eventId" id="upload-form">
-    <div class="mb-3">
-        <label class="form-label" for="file-input">Photos</label>
-        <input type="file" name="files" id="file-input" multiple accept="image/*" class="form-control" />
-        <div class="form-text">Pick individual photos.</div>
-    </div>
-
-    <div class="mb-3">
-        <label class="form-label" for="folder-input">Or a whole folder</label>
-        @* webkitdirectory is the only way to pick a directory from a browser. It is
-           non-standard but implemented by every current browser; where it is missing the
-           input simply behaves as a normal multi-file picker, which is a safe degradation. *@
-        <input type="file" name="files" id="folder-input" multiple webkitdirectory directory class="form-control" />
-        <div class="form-text">
-            Selects every image in the folder and its subfolders. Non-image files
-            (Thumbs.db, sidecar files, and the like) are ignored automatically.
+<div class="gk-panel gk-form mt-3" style="max-width: 640px;">
+    <form method="post" enctype="multipart/form-data" asp-action="Upload" asp-route-eventId="@eventId" id="upload-form">
+        <div class="mb-3">
+            <label class="form-label" for="file-input">Photos</label>
+            <input type="file" name="files" id="file-input" multiple accept="image/*" class="form-control" />
+            <div class="form-text">Pick individual photos.</div>
         </div>
-    </div>
 
-    <div class="alert alert-warning d-none" id="size-warning"></div>
-    <div class="form-text mb-3 d-none" id="selection-summary"></div>
-
-    <div class="d-none mb-3" id="progress-area">
-        <div class="progress" role="progressbar" aria-label="Upload progress">
-            <div class="progress-bar" id="progress-bar" style="width: 0%"></div>
+        <div class="mb-3">
+            <label class="form-label" for="folder-input">Or a whole folder</label>
+            @* webkitdirectory is the only way to pick a directory from a browser. It is
+               non-standard but implemented by every current browser; where it is missing the
+               input simply behaves as a normal multi-file picker, which is a safe degradation. *@
+            <input type="file" name="files" id="folder-input" multiple webkitdirectory directory class="form-control" />
+            <div class="form-text">
+                Selects every image in the folder and its subfolders. Non-image files
+                (Thumbs.db, sidecar files, and the like) are ignored automatically.
+            </div>
         </div>
-        <div class="form-text" id="progress-text"></div>
-    </div>
 
-    <button type="submit" class="btn btn-primary" id="submit-button">Upload</button>
-</form>
+        <div class="alert alert-warning d-none" id="size-warning"></div>
+        <div class="form-text mb-3 d-none" id="selection-summary"></div>
 
-<p class="mt-3"><a asp-action="Index" asp-route-eventId="@eventId">Back to gallery</a></p>
+        <div class="d-none mb-3" id="progress-area">
+            <div class="progress" role="progressbar" aria-label="Upload progress" style="height: 12px; border-radius: 999px;">
+                <div class="progress-bar" id="progress-bar" style="width: 0%; background: #f4502a;"></div>
+            </div>
+            <div class="form-text" id="progress-text"></div>
+        </div>
+
+        <button type="submit" class="btn gk-btn-coral" id="submit-button">Upload</button>
+    </form>
+</div>
+
+<p class="mt-3"><a class="gk-link" asp-action="Index" asp-route-eventId="@eventId">&larr; Back to gallery</a></p>
 
 @section Scripts {
 <script>

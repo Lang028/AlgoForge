@@ -1,0 +1,151 @@
+@model AlgoForge.ViewModels.Admin.AdminLoginViewModel
+
+@{
+    ViewData["Title"] = "Admin sign in";
+}
+
+<style>
+    body {
+        background: #14141c;
+    }
+
+    .admin-wrap {
+        display: flex;
+        justify-content: center;
+        padding: 4rem 0;
+    }
+
+    .admin-card {
+        width: 100%;
+        max-width: 420px;
+        background: #1d1d28;
+        border: 1px solid rgba(255, 255, 255, .08);
+        border-radius: 24px;
+        padding: 2.75rem 2.5rem;
+        color: #fff;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .admin-card::before {
+        content: "";
+        position: absolute;
+        width: 220px;
+        height: 220px;
+        border-radius: 50%;
+        background: #f4502a;
+        filter: blur(90px);
+        opacity: .35;
+        top: -90px;
+        right: -70px;
+    }
+
+    .admin-card > * { position: relative; z-index: 1; }
+
+    .admin-badge {
+        display: inline-block;
+        background: rgba(244, 80, 42, .15);
+        color: #f4502a;
+        border: 1px solid rgba(244, 80, 42, .4);
+        border-radius: 999px;
+        font-size: .68rem;
+        font-weight: 700;
+        letter-spacing: .12em;
+        text-transform: uppercase;
+        padding: .3rem .85rem;
+        margin-bottom: 1rem;
+    }
+
+    .admin-card h1 {
+        font-weight: 800;
+        font-size: 1.5rem;
+        margin-bottom: .4rem;
+    }
+
+    .admin-card .sub {
+        color: rgba(255, 255, 255, .55);
+        font-size: .85rem;
+        margin-bottom: 1.75rem;
+    }
+
+    .admin-card .form-label {
+        font-size: .78rem;
+        font-weight: 600;
+        color: rgba(255, 255, 255, .7);
+    }
+
+    .admin-card .form-control {
+        background: #14141c;
+        border: 1.5px solid rgba(255, 255, 255, .12);
+        border-radius: 12px;
+        color: #fff;
+        padding: .7rem .95rem;
+        font-size: .9rem;
+    }
+
+    .admin-card .form-control:focus {
+        background: #14141c;
+        border-color: #f4502a;
+        color: #fff;
+        box-shadow: 0 0 0 .2rem rgba(244, 80, 42, .15);
+    }
+
+    .admin-card .form-control::placeholder { color: rgba(255, 255, 255, .3); }
+
+    .btn-admin {
+        background: #f4502a;
+        color: #fff;
+        border: 0;
+        border-radius: 999px;
+        font-weight: 700;
+        padding: .7rem 1rem;
+        width: 100%;
+    }
+
+    .btn-admin:hover { background: #d84523; color: #fff; }
+
+    .admin-alt {
+        text-align: center;
+        font-size: .8rem;
+        color: rgba(255, 255, 255, .45);
+        margin-top: 1.5rem;
+    }
+
+    .admin-alt a { color: #f4502a; text-decoration: none; font-weight: 600; }
+
+    .text-danger { font-size: .8rem; }
+</style>
+
+<div class="admin-wrap">
+    <div class="admin-card">
+        <div class="admin-badge">Admin console</div>
+        <h1>System sign in</h1>
+        <div class="sub">Restricted to platform administrators.</div>
+
+        <form method="post">
+            <div asp-validation-summary="All" class="text-danger mb-2"></div>
+
+            <div class="mb-3">
+                <label asp-for="Email" class="form-label"></label>
+                <input asp-for="Email" class="form-control" placeholder="admin@geeked.ac.za" />
+                <span asp-validation-for="Email" class="text-danger"></span>
+            </div>
+
+            <div class="mb-4">
+                <label asp-for="Password" class="form-label"></label>
+                <input asp-for="Password" class="form-control" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;" />
+                <span asp-validation-for="Password" class="text-danger"></span>
+            </div>
+
+            <button type="submit" class="btn-admin">Sign in</button>
+        </form>
+
+        <div class="admin-alt">
+            Not an administrator? <a asp-controller="Account" asp-action="Login">Member sign in</a>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+}
