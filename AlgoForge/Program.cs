@@ -40,6 +40,13 @@ builder.Services.AddHttpClient<PersonPipelineService>(client =>
     client.Timeout = TimeSpan.FromMinutes(10);
 });
 
+// Stops LocalDB idling itself out from under the running app -- see LocalDbKeepAlive.
+// Development only: a real database server does not go to sleep.
+if (builder.Environment.IsDevelopment())
+{
+    builder.Services.AddHostedService<LocalDbKeepAlive>();
+}
+
 var app = builder.Build();
 
 if (app.Environment.IsDevelopment())
@@ -65,21 +72,35 @@ if (app.Environment.IsDevelopment())
             .CreateLogger("AlgoForge.Startup");
         DevDatabaseStartup.UseConnectionString(connectionString);
 
-        if (!await DevDatabaseStartup.EnsureAvailableAsync(db, startupLogger))
+        if (await DevDatabaseStartup.EnsureAvailableAsync(db, startupLogger))
         {
-            // The logger has already explained what to do. Stopping here beats starting an
-            // app whose every page would fail on its first query.
-            startupLogger.LogError("Startup aborted: the database is unreachable.");
-            return;
+            await db.Database.MigrateAsync();
+            await DbInitializer.SeedAsync(db, userManager, roleManager);
         }
-
-        await db.Database.MigrateAsync();
+        else
+        {
+            // Deliberately NOT fatal any more.
+            //
+            // This used to `return`, which ends the process -- and Visual Studio reports
+            // that as "Unable to connect to web server 'AlgoForge'. The web server is no
+            // longer running", which says nothing about a database and sends you looking
+            // for a bug in the app. Worse, recovering meant starting the whole thing again.
+            //
+            // Starting anyway is the better trade: the site comes up, the reason is on
+            // screen and in the log, and because the connection retries on failure the app
+            // heals by itself the moment LocalDB is back -- no restart, no F5.
+            startupLogger.LogError(
+                "The database is unreachable, so migrations and seeding were skipped. " +
+                "The site will start, but pages that read data will fail until LocalDB is " +
+                "back. It should recover on its own; if it does not, run: " +
+                "sqllocaldb stop mssqllocaldb -k  then  sqllocaldb start mssqllocaldb");
+        }
     }
     else
     {
         await db.Database.EnsureCreatedAsync();
+        await DbInitializer.SeedAsync(db, userManager, roleManager);
     }
-    await DbInitializer.SeedAsync(db, userManager, roleManager);
 }
 
 if (!app.Environment.IsDevelopment())
