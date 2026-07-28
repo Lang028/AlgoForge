@@ -1,0 +1,50 @@
+@model List<AlgoForge.Models.Organisation>
+@{
+    ViewData["Title"] = "Organisations";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2 class="mb-0">Organisations</h2>
+    <a asp-action="Create" class="btn btn-primary">Create organisation</a>
+</div>
+
+@if (TempData["SuccessMessage"] != null)
+{
+    <div class="alert alert-success">@TempData["SuccessMessage"]</div>
+}
+@if (TempData["ErrorMessage"] != null)
+{
+    <div class="alert alert-danger">@TempData["ErrorMessage"]</div>
+}
+
+@if (!Model.Any())
+{
+    <p>No organisations yet. <a asp-action="Create">Create one</a> to get started.</p>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Contact email</th>
+                <th>Admin</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var org in Model)
+            {
+                <tr>
+                    <td>@org.Name</td>
+                    <td>@org.ContactEmail</td>
+                    <td>@(org.AdminUser?.DisplayName ?? "—")</td>
+                    <td>
+                        <a asp-action="Edit" asp-route-id="@org.Id" class="btn btn-sm btn-outline-secondary">Edit</a>
+                        <a asp-action="Delete" asp-route-id="@org.Id" class="btn btn-sm btn-outline-danger">Delete</a>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}

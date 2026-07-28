@@ -1,0 +1,36 @@
+@model AlgoForge.Models.Organisation
+@{
+    ViewData["Title"] = "Delete organisation";
+    var eventCount = (int)(ViewData["EventCount"] ?? 0);
+}
+
+<h2>Delete organisation</h2>
+
+<div class="alert alert-danger">
+    Are you sure you want to delete <strong>@Model.Name</strong>? This can't be undone.
+</div>
+
+@if (eventCount > 0)
+{
+    <div class="alert alert-warning">
+        This organisation has @eventCount event(s) attached and can't be deleted until they're
+        reassigned or removed.
+    </div>
+}
+
+<dl class="row">
+    <dt class="col-sm-3">Name</dt>
+    <dd class="col-sm-9">@Model.Name</dd>
+
+    <dt class="col-sm-3">Contact email</dt>
+    <dd class="col-sm-9">@Model.ContactEmail</dd>
+
+    <dt class="col-sm-3">Admin</dt>
+    <dd class="col-sm-9">@(Model.AdminUser?.DisplayName ?? "—")</dd>
+</dl>
+
+<form asp-action="Delete" method="post">
+    <input type="hidden" asp-for="Id" />
+    <button type="submit" class="btn btn-danger" @(eventCount > 0 ? "disabled" : "")>Delete</button>
+    <a asp-action="Index" class="btn btn-link">Cancel</a>
+</form>

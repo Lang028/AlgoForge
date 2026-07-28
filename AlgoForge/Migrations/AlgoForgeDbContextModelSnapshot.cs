@@ -669,7 +669,7 @@ namespace AlgoForge.Migrations
                     b.HasOne("AlgoForge.Models.Organisation", "Organisation")
                         .WithMany("Events")
                         .HasForeignKey("OrganisationId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("Organisation");

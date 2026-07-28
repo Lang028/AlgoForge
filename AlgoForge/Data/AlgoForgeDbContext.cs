@@ -52,6 +52,16 @@ namespace AlgoForge.Data
                 .HasForeignKey(p => p.UploadedByUserId)
                 .OnDelete(DeleteBehavior.Restrict);
 
+            // Event.OrganisationId is a required FK with no explicit behavior configured --
+            // every other relationship in this file is deliberately Restrict, so an
+            // Organisation delete doesn't silently cascade through Events -> Photos (which
+            // is itself Restrict) and blow up at the DB level instead of a friendly message.
+            builder.Entity<Event>()
+                .HasOne(e => e.Organisation)
+                .WithMany(o => o.Events)
+                .HasForeignKey(e => e.OrganisationId)
+                .OnDelete(DeleteBehavior.Restrict);
+
             builder.Entity<Organisation>()
                 .HasOne(o => o.AdminUser)
                 .WithMany()
