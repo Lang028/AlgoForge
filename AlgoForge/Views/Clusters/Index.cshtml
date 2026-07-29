@@ -77,9 +77,21 @@
                 that person is clearly visible in &mdash; they still have to confirm before anything is final.
             </p>
         </div>
-        <form method="post" asp-action="Recluster" asp-route-eventId="@eventId">
-            <button type="submit" class="btn gk-btn-soft">Re-cluster event</button>
-        </form>
+        <div class="d-flex gap-2">
+            @* Re-cluster groups detections that already exist. If the pipeline service was
+               down during an upload there are none, and only re-running detection helps. *@
+            <form method="post" asp-controller="Photos" asp-action="RetryDetection" asp-route-eventId="@eventId">
+                @Html.AntiForgeryToken()
+                <button type="submit" class="btn gk-btn-soft"
+                        title="Re-runs face detection on photos that never got any, e.g. uploaded while the pipeline service was down">
+                    Retry detection
+                </button>
+            </form>
+
+            <form method="post" asp-action="Recluster" asp-route-eventId="@eventId">
+                <button type="submit" class="btn gk-btn-soft">Re-cluster event</button>
+            </form>
+        </div>
     </div>
 </div>
 
