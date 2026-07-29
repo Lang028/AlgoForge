@@ -11,6 +11,7 @@ threshold without editing the file (GEEKEDON_S_MIN=80 uvicorn main:app ...).
 """
 
 import os
+from pathlib import Path
 
 
 def _env_float(name: str, default: float) -> float:
@@ -28,6 +29,8 @@ PERSON_CONF = _env_float("GEEKEDON_PERSON_CONF", 0.5)
 # YOLO's COCO class index for "person". Nothing else is of interest to this pipeline.
 YOLO_PERSON_CLASS = 0
 YOLO_WEIGHTS = os.environ.get("GEEKEDON_YOLO_WEIGHTS", "yolo11s.pt")
+SERVICE_ROOT = Path(__file__).resolve().parent.parent
+CACHE_ROOT = Path(os.environ.get("GEEKEDON_FACE_CACHE_DIR", SERVICE_ROOT / ".cache"))
 
 # The plan runs detection on the display rendition (long side ~2048px). Renditions are
 # not built yet, so the service downscales oversized originals to this instead. Doing it
