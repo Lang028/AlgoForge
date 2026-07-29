@@ -71,18 +71,19 @@ namespace AlgoForge.Controllers
                 return Challenge();
             }
 
-            var (uploaded, skipped) = await StoreAndDetectAsync(eventId, userId, files);
+            var (uploaded, skipped, detectionFailures) = await StoreAndDetectAsync(eventId, userId, files);
 
             // One clustering pass for the whole batch. A pipeline outage must not lose the
             // uploaded photos: they are already saved and can be re-clustered from the
             // review grid once the service is back.
             if (uploaded > 0 && !await TryReclusterAsync(eventId))
             {
-                TempData["ErrorMessage"] =
-                    "Photos uploaded, but grouping people failed. Use Re-cluster on the identify page to retry.";
+                AddErrorMessage(
+                    "Photos uploaded, but grouping people failed. Use Re-cluster on the identify page to retry.");
             }
 
             ReportOutcome(uploaded, skipped);
+            ReportDetectionFailures(detectionFailures);
             return RedirectToAction(nameof(Index), new { eventId });
         }
 
@@ -120,8 +121,8 @@ namespace AlgoForge.Controllers
                 return Unauthorized();
             }
 
-            var (uploaded, skipped) = await StoreAndDetectAsync(eventId, userId, files);
-            return Json(new { uploaded, skipped });
+            var (uploaded, skipped, detectionFailures) = await StoreAndDetectAsync(eventId, userId, files);
+            return Json(new { uploaded, skipped, detectionFailures });
         }
 
         // Runs the single clustering pass once the last batch has landed, and records the
@@ -135,7 +136,7 @@ namespace AlgoForge.Controllers
         [ValidateAntiForgeryToken]
         [RequireEventRole(EventRole.Photographer)]
         public async Task<IActionResult> FinishUpload(
-            Guid eventId, int uploaded, List<string>? skipped)
+            Guid eventId, int uploaded, List<string>? skipped, int detectionFailures = 0)
         {
             var evt = await _db.Events.FindAsync(eventId);
             if (evt is null)
@@ -150,11 +151,12 @@ namespace AlgoForge.Controllers
             }
 
             ReportOutcome(uploaded, skipped ?? new List<string>());
+            ReportDetectionFailures(detectionFailures);
 
             if (!clustered)
             {
-                TempData["ErrorMessage"] =
-                    "Photos uploaded, but grouping people failed. Use Re-cluster on the identify page to retry.";
+                AddErrorMessage(
+                    "Photos uploaded, but grouping people failed. Use Re-cluster on the identify page to retry.");
             }
 
             return Json(new { clustered });
@@ -162,7 +164,7 @@ namespace AlgoForge.Controllers
 
         // Stores each accepted file and runs detection on it. Shared by the plain form post
         // and the batched folder upload so both apply exactly the same validation.
-        private async Task<(int Uploaded, List<string> Skipped)> StoreAndDetectAsync(
+        private async Task<(int Uploaded, List<string> Skipped, int DetectionFailures)> StoreAndDetectAsync(
             Guid eventId, Guid userId, List<IFormFile>? files)
         {
             // Model binding leaves this null when the form carries no file part at all,
@@ -181,6 +183,7 @@ namespace AlgoForge.Controllers
 
             var uploaded = 0;
             var skipped = new List<string>();
+            var detectionFailures = 0;
 
             foreach (var file in files)
             {
@@ -232,7 +235,11 @@ namespace AlgoForge.Controllers
                 // Still synchronous, and still the wrong place for this: D16 says never in
                 // the request path. The seam to fix it is right here -- enqueue instead of
                 // awaiting.
-                await _pipeline.ProcessPhotoAsync(photo, filePath);
+                var detectionSucceeded = await _pipeline.ProcessPhotoAsync(photo, filePath);
+                if (!detectionSucceeded)
+                {
+                    detectionFailures++;
+                }
 
                 // Second save persists the detections and the processing status. If this
                 // one fails the photograph itself is already stored and can be reprocessed;
@@ -241,7 +248,90 @@ namespace AlgoForge.Controllers
                 uploaded++;
             }
 
-            return (uploaded, skipped);
+            return (uploaded, skipped, detectionFailures);
+        }
+
+        // POST /Photos/{eventId}/RetryDetection
+        //
+        // Runs detection again over the photos in an event that never got any. Until this
+        // existed, a photo uploaded while the Python service was down was stuck: detection
+        // only ran on the upload path, and Re-cluster cannot help because it groups
+        // existing detections rather than creating them. The only remedy was deleting the
+        // photographs and uploading them a second time.
+        //
+        // The originals are already on disk, so re-running detection is simply a matter of
+        // reading them back. Photos that already succeeded are left alone.
+        [HttpPost]
+        [Route("Photos/{eventId}/RetryDetection")]
+        [ValidateAntiForgeryToken]
+        [RequireEventRole(EventRole.Coordinator, EventRole.Photographer)]
+        public async Task<IActionResult> RetryDetection(Guid eventId)
+        {
+            var pending = await _db.Photos
+                .Where(p => p.EventId == eventId
+                            && p.Status == PhotoStatus.Visible
+                            && p.FaceProcessingStatus != PhotoFaceProcessingStatus.Processed)
+                .ToListAsync();
+
+            if (pending.Count == 0)
+            {
+                TempData["SuccessMessage"] = "Every photo in this event has already been processed.";
+                return RedirectToAction("Index", "Clusters", new { eventId });
+            }
+
+            var recovered = 0;
+            var stillFailing = 0;
+            var missingFiles = 0;
+
+            foreach (var photo in pending)
+            {
+                var path = ResolveStoredPath(photo);
+                if (path is null)
+                {
+                    // The row survived but the file did not -- nothing to re-read.
+                    missingFiles++;
+                    continue;
+                }
+
+                if (await _pipeline.ProcessPhotoAsync(photo, path))
+                {
+                    recovered++;
+                }
+                else
+                {
+                    stillFailing++;
+                }
+
+                // Saved per photo rather than once at the end: this loop can run for
+                // minutes over a few hundred photographs, and a failure halfway through
+                // should keep the work already done.
+                await _db.SaveChangesAsync();
+            }
+
+            if (recovered > 0 && !await TryReclusterAsync(eventId))
+            {
+                AddErrorMessage(
+                    $"Detection recovered {recovered} photo(s), but grouping them failed. Try Re-cluster.");
+                return RedirectToAction("Index", "Clusters", new { eventId });
+            }
+
+            var parts = new List<string>();
+            if (recovered > 0) parts.Add($"{recovered} photo(s) now have people detected");
+            if (stillFailing > 0) parts.Add($"{stillFailing} still failed -- is the person pipeline service running?");
+            if (missingFiles > 0) parts.Add($"{missingFiles} had no file on disk");
+
+            var summary = string.Join("; ", parts) + ".";
+
+            if (recovered > 0)
+            {
+                TempData["SuccessMessage"] = summary;
+            }
+            else
+            {
+                AddErrorMessage(summary);
+            }
+
+            return RedirectToAction("Index", "Clusters", new { eventId });
         }
 
         private async Task<bool> TryReclusterAsync(Guid eventId)
@@ -278,7 +368,7 @@ namespace AlgoForge.Controllers
             {
                 if (uploaded == 0)
                 {
-                    TempData["ErrorMessage"] = "No files were selected.";
+                    AddErrorMessage("No files were selected.");
                 }
 
                 return;
@@ -294,9 +384,28 @@ namespace AlgoForge.Controllers
             }
 
             var detail = $"Skipped: {named}.";
-            TempData["ErrorMessage"] = uploaded > 0
+            AddErrorMessage(uploaded > 0
                 ? detail
-                : $"Nothing was uploaded. {detail}";
+                : $"Nothing was uploaded. {detail}");
+        }
+
+        private void ReportDetectionFailures(int detectionFailures)
+        {
+            if (detectionFailures <= 0)
+            {
+                return;
+            }
+
+            AddErrorMessage(
+                $"{detectionFailures} photo(s) uploaded, but person detection failed. " +
+                "Start the person pipeline service before uploading photos; these photos have no face detections yet.");
+        }
+
+        private void AddErrorMessage(string message)
+        {
+            TempData["ErrorMessage"] = TempData["ErrorMessage"] is string existing && !string.IsNullOrWhiteSpace(existing)
+                ? $"{existing} {message}"
+                : message;
         }
 
         // The uploaded filename is attacker-controlled and is about to be echoed into a
