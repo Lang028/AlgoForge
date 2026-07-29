@@ -2,22 +2,32 @@
 # because nothing is ever taggable without one.
 fastapi==0.115.6
 uvicorn[standard]==0.34.0
-insightface==0.7.3
+insightface==1.0.1
 onnxruntime==1.20.1
-numpy==1.26.4
+numpy==2.5.1
 python-multipart==0.0.20
 Pillow==11.1.0
-opencv-python-headless==4.10.0.84
+opencv-python==5.0.0.93
 
 # Person detection. Optional: without it, person boxes are synthesised from face boxes
 # and the appearance crop shrinks to head-and-shoulders.
 ultralytics==8.3.55
+matplotlib==3.10.8
+pandas==2.3.3
+psutil==7.2.0
+py-cpuinfo==9.0.0
+seaborn==0.13.2
+ultralytics-thop==2.0.18
 
 # Appearance + head signal. Optional, and the heaviest install here (~2GB with torch).
-# Install torch from the CPU index first, or pip pulls the CUDA build:
-#   pip install torch==2.5.1 --index-url https://download.pytorch.org/whl/cpu
-torch==2.5.1
+# Install torch/torchvision from the CPU index first, or pip may pull GPU packages:
+#   pip install torch==2.5.1 torchvision==0.20.1 --index-url https://download.pytorch.org/whl/cpu
+torch==2.5.1+cpu
+torchvision==0.20.1+cpu
 torchreid==0.2.5
+gdown==5.2.0
+yacs==0.1.8
+tensorboard==2.21.0
 
 # Fallback appearance backend if torchreid will not install (plan 4.4). Install this
 # instead of torchreid and embeddings.py picks it up automatically -- no code change.

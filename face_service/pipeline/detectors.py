@@ -11,6 +11,7 @@ Tier A nothing is ever taggable, so a face-less pipeline has no product left.
 from __future__ import annotations
 
 import logging
+import os
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -79,6 +80,11 @@ def get_yolo():
     if _yolo is not None or _yolo_failed:
         return _yolo
     try:
+        cache_root = config.CACHE_ROOT
+        cache_root.mkdir(parents=True, exist_ok=True)
+        os.environ.setdefault("YOLO_CONFIG_DIR", str(cache_root / "ultralytics"))
+        os.environ.setdefault("MPLCONFIGDIR", str(cache_root / "matplotlib"))
+
         from ultralytics import YOLO
 
         _yolo = YOLO(config.YOLO_WEIGHTS)

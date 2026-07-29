@@ -179,6 +179,7 @@
             const groups = batches(accepted);
             let done = 0;
             let uploaded = 0;
+            let detectionFailures = 0;
             const skipped = [];
 
             for (let i = 0; i < groups.length; i++) {
@@ -188,6 +189,7 @@
                     const result = await postBatch(
                         '@Url.Action("UploadBatch", "Photos")?eventId=' + eventId, groups[i]);
                     uploaded += result.uploaded;
+                    detectionFailures += result.detectionFailures || 0;
                     if (result.skipped) skipped.push(...result.skipped);
                 } catch (err) {
                     // One failed batch must not discard the batches that already landed:
@@ -214,7 +216,8 @@
                     uploaded: uploaded,
                     // Capped: a folder can skip hundreds of files and the message only ever
                     // names the first few anyway.
-                    skipped: skipped.slice(0, 20)
+                    skipped: skipped.slice(0, 20),
+                    detectionFailures: detectionFailures
                 });
             } catch {
                 // Clustering is retryable from the identify page, so a failure here is not

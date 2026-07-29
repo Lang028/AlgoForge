@@ -37,7 +37,7 @@ namespace AlgoForge.Services.PersonPipeline
 
         // Detects people in one photo and stores a PersonDetection per person. Does not
         // cluster: clustering is per-event and runs once per batch, not once per photo.
-        public async Task ProcessPhotoAsync(Photo photo, string absoluteFilePath)
+        public async Task<bool> ProcessPhotoAsync(Photo photo, string absoluteFilePath)
         {
             try
             {
@@ -45,7 +45,7 @@ namespace AlgoForge.Services.PersonPipeline
                 if (result is null)
                 {
                     photo.FaceProcessingStatus = PhotoFaceProcessingStatus.Failed;
-                    return;
+                    return false;
                 }
 
                 foreach (var detection in result.Detections)
@@ -85,6 +85,7 @@ namespace AlgoForge.Services.PersonPipeline
                     photo.Id, result.Detections.Count, result.Detections.Count(d => d.IsTaggable));
 
                 photo.FaceProcessingStatus = PhotoFaceProcessingStatus.Processed;
+                return true;
             }
             catch (Exception ex)
             {
@@ -93,6 +94,7 @@ namespace AlgoForge.Services.PersonPipeline
                 // simply reprocessable later. It must not take the upload down with it.
                 _logger.LogError(ex, "Person detection failed for photo {PhotoId}", photo.Id);
                 photo.FaceProcessingStatus = PhotoFaceProcessingStatus.Failed;
+                return false;
             }
         }
 
