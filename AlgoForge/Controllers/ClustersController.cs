@@ -119,6 +119,67 @@ namespace AlgoForge.Controllers
             return RedirectToAction(nameof(Index), new { eventId });
         }
 
+        // Covers the "not on the invite list" case the identify grid runs into constantly:
+        // someone in the photos who was never imported. Rather than sending the
+        // photographer away to the (Coordinator-only) attendee list and back, this creates
+        // the Attendee record right here and links it in the same step -- the whole reason
+        // this exists on ClustersController rather than EventsController is so a
+        // Photographer, who cannot reach Attendees/Add, can still do this from the grid.
+        [HttpPost]
+        [Route("Clusters/{eventId}/QuickAddAttendee")]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> QuickAddAttendee(Guid eventId, Guid clusterId, string name)
+        {
+            var cluster = await _db.PersonClusters
+                .FirstOrDefaultAsync(c => c.Id == clusterId && c.EventId == eventId);
+            if (cluster is null)
+            {
+                return NotFound();
+            }
+
+            if (!cluster.HasTaggableDetection)
+            {
+                return BadRequest("This cluster has no clearly visible detections and cannot be identified.");
+            }
+
+            var trimmedName = name?.Trim();
+            if (string.IsNullOrEmpty(trimmedName))
+            {
+                TempData["ErrorMessage"] = "A name is needed to add an attendee.";
+                return RedirectToAction(nameof(Index), new { eventId });
+            }
+
+            var userIdText = _userManager.GetUserId(User);
+            if (userIdText is null || !Guid.TryParse(userIdText, out var userId))
+            {
+                return Challenge();
+            }
+
+            // Email and contact info are left blank -- this person has no invite to send
+            // anywhere yet. A coordinator fills those in from Attendees/Edit once they know
+            // them, the same as any other attendee record.
+            var attendee = new Attendee
+            {
+                Id = Guid.NewGuid(),
+                EventId = eventId,
+                Name = trimmedName,
+                InviteToken = Guid.NewGuid().ToString("N")
+            };
+            _db.Attendees.Add(attendee);
+
+            cluster.LinkedAttendeeId = attendee.Id;
+            cluster.Status = PersonClusterStatus.Identified;
+            cluster.IdentifiedByUserId = userId;
+            await _db.SaveChangesAsync();
+
+            var created = await _pipeline.SyncSuggestedTagsAsync(eventId, cluster.Id, attendee.Id, userId);
+
+            TempData["SuccessMessage"] =
+                $"{attendee.Name} added and linked -- {created} tag(s) suggested. " +
+                "Add their email from the Attendees page so they can review them.";
+            return RedirectToAction(nameof(Index), new { eventId });
+        }
+
         // Marks a cluster as not-an-attendee (staff, passers-by). Hidden from every flow;
         // embeddings fall under the archive-time cleanup (D7).
         [HttpPost]

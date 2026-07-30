@@ -20,5 +20,12 @@ namespace AlgoForge.ViewModels.Events
 
         public int PhotoCount { get; set; }
         public int AttendeeCount { get; set; }
+
+        /// <summary>The viewer's own role(s) in this event -- drives which action buttons the card offers.</summary>
+        public List<EventRole> ViewerRoles { get; set; } = new();
+
+        public bool CanUpload => ViewerRoles.Contains(EventRole.Photographer);
+        public bool CanManageAttendees => ViewerRoles.Contains(EventRole.Coordinator);
+        public bool CanHandOver => ViewerRoles.Contains(EventRole.Coordinator);
     }
 }

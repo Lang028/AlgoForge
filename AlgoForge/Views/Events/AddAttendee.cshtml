@@ -26,7 +26,8 @@
 
         <div class="mb-4">
             <label asp-for="ContactInfo" class="form-label"></label>
-            <input asp-for="ContactInfo" class="form-control" placeholder="Phone, LinkedIn, ..." />
+            <input asp-for="ContactInfo" class="form-control" placeholder="Phone, LinkedIn, ... (optional)" />
+            <div class="form-text">Optional -- add it now if you know it, or fill it in later.</div>
             <span asp-validation-for="ContactInfo" class="text-danger"></span>
         </div>
 

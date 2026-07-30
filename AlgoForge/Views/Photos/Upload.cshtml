@@ -43,7 +43,7 @@
 
         <div class="d-none mb-3" id="progress-area">
             <div class="progress" role="progressbar" aria-label="Upload progress" style="height: 12px; border-radius: 999px;">
-                <div class="progress-bar" id="progress-bar" style="width: 0%; background: #7c5cfc;"></div>
+                <div class="progress-bar" id="progress-bar" style="width: 0%; background: #c1502e;"></div>
             </div>
             <div class="form-text" id="progress-text"></div>
         </div>
@@ -61,9 +61,9 @@
         const maxRequestBytes = @PhotoUploadPolicy.MaxRequestBytes;
         const maxFileBytes = @PhotoUploadPolicy.MaxFileBytes;
 
-        // A batch is bounded by both count and bytes: detection runs inline at ~1-3s per
-        // photo, so the count is what keeps a single request short, while the byte cap stops
-        // a handful of very large frames from making one batch enormous anyway.
+        // Detection itself now runs in the background (PhotoDetectionWorker), so a batch no
+        // longer has to stay small to dodge a request timeout -- these limits just keep any
+        // one upload request a reasonable size and give the progress bar something to move on.
         const batchFileLimit = 8;
         const batchByteLimit = 32 * 1024 * 1024;
 
@@ -179,17 +179,14 @@
             const groups = batches(accepted);
             let done = 0;
             let uploaded = 0;
-            let detectionFailures = 0;
             const skipped = [];
 
             for (let i = 0; i < groups.length; i++) {
-                progressText.textContent =
-                    'Uploading and detecting faces -- ' + done + ' of ' + accepted.length + ' photos...';
+                progressText.textContent = 'Uploading -- ' + done + ' of ' + accepted.length + ' photos...';
                 try {
                     const result = await postBatch(
                         '@Url.Action("UploadBatch", "Photos")?eventId=' + eventId, groups[i]);
                     uploaded += result.uploaded;
-                    detectionFailures += result.detectionFailures || 0;
                     if (result.skipped) skipped.push(...result.skipped);
                 } catch (err) {
                     // One failed batch must not discard the batches that already landed:
@@ -207,25 +204,63 @@
             }
 
             // Always called, even when everything was skipped: this is also what hands the
-            // run's totals to the gallery, since no single batch request knew them.
-            progressText.textContent = uploaded > 0
-                ? 'Grouping people across the event...'
-                : 'Finishing...';
+            // run's totals to the gallery, since no single batch request knew them. It no
+            // longer triggers clustering -- see FinishUpload for why.
             try {
                 await postBatch('@Url.Action("FinishUpload", "Photos")?eventId=' + eventId, [], {
                     uploaded: uploaded,
                     // Capped: a folder can skip hundreds of files and the message only ever
                     // names the first few anyway.
-                    skipped: skipped.slice(0, 20),
-                    detectionFailures: detectionFailures
+                    skipped: skipped.slice(0, 20)
                 });
             } catch {
-                // Clustering is retryable from the identify page, so a failure here is not
-                // worth losing the upload over.
+                // The gallery still shows what actually got uploaded either way; this call
+                // only records the totals for its message.
+            }
+
+            // Detection itself runs in the background from here (PhotoDetectionWorker), so
+            // uploading is already done. This is a courtesy wait so the photographer sees it
+            // start before landing on the gallery, not a guarantee it finishes -- a big
+            // batch can outlast it, and the gallery/identify page keeps showing progress
+            // either way.
+            if (uploaded > 0) {
+                await pollDetection();
             }
 
             window.location = '@Url.Action("Index", "Photos")?eventId=' + eventId;
         });
+
+        async function pollDetection() {
+            progressBar.style.width = '0%';
+            progressBar.textContent = '';
+            progressText.textContent = 'Detecting faces in the background...';
+
+            const maxPolls = 60; // ~2 minutes at the interval below
+            for (let i = 0; i < maxPolls; i++) {
+                let status;
+                try {
+                    // no-store: polled repeatedly against the same URL, and a cached response
+                    // would make this loop think nothing changed between polls.
+                    const res = await fetch(
+                        '@Url.Action("DetectionStatus", "Photos")?eventId=' + eventId,
+                        { credentials: 'same-origin', cache: 'no-store' });
+                    if (!res.ok) return;
+                    status = await res.json();
+                } catch {
+                    return;
+                }
+
+                const total = status.pending + status.processed + status.failed;
+                if (total > 0) {
+                    const pct = Math.round(((total - status.pending) / total) * 100);
+                    progressBar.style.width = pct + '%';
+                    progressBar.textContent = pct + '%';
+                }
+
+                if (status.pending === 0) return;
+                await new Promise(resolve => setTimeout(resolve, 2000));
+            }
+        }
     })();
 </script>
 }

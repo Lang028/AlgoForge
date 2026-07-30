@@ -23,15 +23,18 @@ namespace AlgoForge.Controllers
 
         private readonly AlgoForgeDbContext _db;
         private readonly UserManager<ApplicationUser> _userManager;
+        private readonly SignInManager<ApplicationUser> _signInManager;
         private readonly IEmailSender _emailSender;
 
         public DelegatesController(
             AlgoForgeDbContext db,
             UserManager<ApplicationUser> userManager,
+            SignInManager<ApplicationUser> signInManager,
             IEmailSender emailSender)
         {
             _db = db;
             _userManager = userManager;
+            _signInManager = signInManager;
             _emailSender = emailSender;
         }
 
@@ -220,6 +223,29 @@ namespace AlgoForge.Controllers
             }
 
             await _db.SaveChangesAsync();
+
+            // Same reasoning as ClaimController's attendee claim: the dashboard and nav read
+            // the sticky ActiveRole claim, not a live membership query, so without this a
+            // delegate who registered as a Coordinator/Photographer (the only sign-up
+            // choices) stays on the staff-facing dashboard forever instead of the
+            // view-and-download-only one this role is meant to get.
+            var currentUser = await _userManager.GetUserAsync(User);
+            if (currentUser is not null)
+            {
+                var existingClaim = (await _userManager.GetClaimsAsync(currentUser))
+                    .FirstOrDefault(c => c.Type == "ActiveRole");
+                var newClaim = new System.Security.Claims.Claim("ActiveRole", EventRole.Delegate.ToString());
+                if (existingClaim is null)
+                {
+                    await _userManager.AddClaimAsync(currentUser, newClaim);
+                    await _signInManager.RefreshSignInAsync(currentUser);
+                }
+                else if (existingClaim.Value != newClaim.Value)
+                {
+                    await _userManager.ReplaceClaimAsync(currentUser, existingClaim, newClaim);
+                    await _signInManager.RefreshSignInAsync(currentUser);
+                }
+            }
 
             TempData["SuccessMessage"] =
                 $"You're viewing this gallery on behalf of {invite.Attendee?.Name}.";

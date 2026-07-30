@@ -37,7 +37,8 @@
 
         <div class="mb-4">
             <label asp-for="ContactInfo" class="form-label"></label>
-            <input asp-for="ContactInfo" class="form-control" />
+            <input asp-for="ContactInfo" class="form-control" placeholder="Phone, LinkedIn, ... (optional)" />
+            <div class="form-text">Optional -- leave blank if you don't have it.</div>
             <span asp-validation-for="ContactInfo" class="text-danger"></span>
         </div>
 

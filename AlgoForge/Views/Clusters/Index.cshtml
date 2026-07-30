@@ -18,6 +18,14 @@
 }
 
 <style>
+    /* Breaks the page out of the layout's Bootstrap .container (which caps around
+       1140-1320px) so the grid can actually use the screen width it has. Horizontal-only:
+       vertical spacing from the layout is left alone. */
+    .identify-wrap {
+        margin: 0 calc(50% - 50vw);
+        padding: 0 calc(50vw - 50% + 1.5rem) 3rem;
+    }
+
     .cluster-card {
         width: 320px;
         background: #fff;
@@ -30,7 +38,7 @@
 
     .cluster-face-box {
         position: absolute;
-        border: 2px solid #7c5cfc;
+        border: 2px solid #c1502e;
         border-radius: 4px;
         box-sizing: border-box;
     }
@@ -38,35 +46,82 @@
     .cluster-card .body { padding: 1rem 1.1rem 1.2rem; }
 
     .shaky {
-        border-left: 3px solid #7c5cfc;
+        border-left: 3px solid #c1502e;
         padding-left: .5rem;
     }
 
-    .cluster-card .form-select {
+    /* ---------- searchable "who is this" combobox ---------- */
+    .combo-wrap { position: relative; }
+
+    .combo-search {
         background: #f3f4f6;
         border: 1.5px solid transparent;
-        border-radius: 12px 0 0 12px;
+        border-radius: 12px;
         font-size: .85rem;
+        width: 100%;
     }
 
-    .cluster-card .form-select:focus {
+    .combo-search:focus {
         background: #fff;
-        border-color: #7c5cfc;
+        border-color: #c1502e;
         box-shadow: none;
+        outline: none;
+    }
+
+    .combo-suggestions {
+        position: absolute;
+        z-index: 5;
+        top: calc(100% + 4px);
+        left: 0;
+        right: 0;
+        background: #fff;
+        border: 1px solid #e5e7eb;
+        border-radius: 12px;
+        box-shadow: 0 12px 28px rgba(20, 20, 28, .12);
+        max-height: 220px;
+        overflow-y: auto;
+        padding: .35rem;
+    }
+
+    .combo-suggestion {
+        display: block;
+        width: 100%;
+        text-align: left;
+        background: none;
+        border: 0;
+        padding: .5rem .6rem;
+        border-radius: 8px;
+        font-size: .85rem;
+        color: #14141c;
+        cursor: pointer;
+    }
+
+    .combo-suggestion:hover,
+    .combo-suggestion.active { background: #fbe4da; color: #c1502e; }
+
+    .combo-suggestion.create-new {
+        color: #c1502e;
+        font-weight: 600;
+        border-top: 1px solid #f0f0f2;
+        margin-top: .25rem;
+        padding-top: .6rem;
     }
 
     .cluster-card .btn-identify {
-        background: #7c5cfc;
+        background: #c1502e;
         color: #fff;
         border: 0;
-        border-radius: 0 12px 12px 0;
+        border-radius: 999px;
         font-weight: 600;
         font-size: .85rem;
+        width: 100%;
     }
 
-    .cluster-card .btn-identify:hover { background: #5b3fd6; color: #fff; }
+    .cluster-card .btn-identify:hover:not(:disabled) { background: #9c3f24; color: #fff; }
+    .cluster-card .btn-identify:disabled { opacity: .5; }
 </style>
 
+<div class="identify-wrap">
 <div class="gk-hero my-2">
     <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
         <div>
@@ -77,32 +132,43 @@
                 that person is clearly visible in &mdash; they still have to confirm before anything is final.
             </p>
         </div>
-        <div class="d-flex gap-2">
-            @* Re-cluster groups detections that already exist. If the pipeline service was
-               down during an upload there are none, and only re-running detection helps. *@
-            <form method="post" asp-controller="Photos" asp-action="RetryDetection" asp-route-eventId="@eventId">
-                @Html.AntiForgeryToken()
-                <button type="submit" class="btn gk-btn-soft"
-                        title="Re-runs face detection on photos that never got any, e.g. uploaded while the pipeline service was down">
-                    Retry detection
-                </button>
-            </form>
+        <div class="d-flex flex-column align-items-end gap-2">
+            <div class="d-flex gap-2">
+                @* Re-cluster groups detections that already exist. If the pipeline service was
+                   down during an upload there are none, and only re-running detection helps.
+                   JavaScript intercepts this and drives it in batches for a progress bar; the
+                   plain post below is the no-JavaScript fallback. *@
+                <form method="post" asp-controller="Photos" asp-action="RetryDetection" asp-route-eventId="@eventId" id="retry-form">
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn gk-btn-soft" id="retry-button"
+                            title="Re-runs face detection on photos that never got any, e.g. uploaded while the pipeline service was down">
+                        Retry detection
+                    </button>
+                </form>
 
-            <form method="post" asp-action="Recluster" asp-route-eventId="@eventId">
-                <button type="submit" class="btn gk-btn-soft">Re-cluster event</button>
-            </form>
+                <form method="post" asp-action="Recluster" asp-route-eventId="@eventId">
+                    <button type="submit" class="btn gk-btn-soft">Re-cluster event</button>
+                </form>
+            </div>
+            <div class="d-none w-100" id="retry-progress-area" style="max-width: 320px;">
+                <div class="progress" role="progressbar" aria-label="Retry detection progress" style="height: 10px; border-radius: 999px;">
+                    <div class="progress-bar" id="retry-progress-bar" style="width: 0%; background: #c1502e;"></div>
+                </div>
+                <div class="form-text text-end" id="retry-progress-text"></div>
+            </div>
         </div>
     </div>
 </div>
 
 @if (TempData["SuccessMessage"] is string success)
 {
-    <div class="alert alert-success mt-3">@success</div>
+    <div class="alert alert-success mt-3" id="server-success-message">@success</div>
 }
 @if (TempData["ErrorMessage"] is string error)
 {
-    <div class="alert alert-danger mt-3">@error</div>
+    <div class="alert alert-danger mt-3" id="server-error-message">@error</div>
 }
+<div id="retry-result-message"></div>
 
 @if (!Model.Any())
 {
@@ -150,18 +216,16 @@ else
                     }
                     else
                     {
-                        <form method="post" asp-action="Identify" asp-route-eventId="@eventId">
+                        <form method="post" asp-action="Identify" asp-route-eventId="@eventId" class="identify-combo-form mb-2">
+                            @Html.AntiForgeryToken()
                             <input type="hidden" name="clusterId" value="@cluster.Id" />
-                            <div class="input-group mb-2">
-                                <select name="attendeeId" class="form-select" required>
-                                    <option value="">Who is this?</option>
-                                    @foreach (var attendee in attendees)
-                                    {
-                                        <option value="@attendee.Id">@attendee.Name</option>
-                                    }
-                                </select>
-                                <button type="submit" class="btn btn-identify">Identify</button>
+                            <input type="hidden" name="attendeeId" class="combo-attendee-id" />
+                            <input type="hidden" name="name" class="combo-new-name" />
+                            <div class="combo-wrap mb-2">
+                                <input type="text" class="form-control combo-search" placeholder="Who is this? Type a name..." autocomplete="off" />
+                                <div class="combo-suggestions d-none"></div>
                             </div>
+                            <button type="submit" class="btn btn-identify combo-submit" disabled>Identify</button>
                         </form>
                         <form method="post" asp-action="Ignore" asp-route-eventId="@eventId">
                             <input type="hidden" name="clusterId" value="@cluster.Id" />
@@ -175,3 +239,262 @@ else
 }
 
 <p class="mt-3"><a class="gk-link" asp-controller="Photos" asp-action="Index" asp-route-eventId="@eventId">&larr; Back to gallery</a></p>
+</div>
+
+@section Scripts {
+<script>
+    (function () {
+        const eventId = '@eventId';
+        const batchSize = 8; // matches the folder-uploader's batch size, same reasoning: keeps each request short
+
+        const retryForm = document.getElementById('retry-form');
+        const retryButton = document.getElementById('retry-button');
+        const progressArea = document.getElementById('retry-progress-area');
+        const progressBar = document.getElementById('retry-progress-bar');
+        const progressText = document.getElementById('retry-progress-text');
+        const resultMessage = document.getElementById('retry-result-message');
+
+        function token() {
+            const input = retryForm.querySelector('input[name="__RequestVerificationToken"]');
+            return input ? input.value : '';
+        }
+
+        function showResult(text, isError) {
+            resultMessage.innerHTML = '<div class="alert ' + (isError ? 'alert-danger' : 'alert-success') + ' mt-3">' +
+                text + '</div>';
+        }
+
+        async function postForm(url, fields) {
+            const body = new URLSearchParams();
+            body.append('__RequestVerificationToken', token());
+            for (const [key, values] of Object.entries(fields || {})) {
+                for (const value of values) body.append(key, value);
+            }
+            const res = await fetch(url, { method: 'POST', body, credentials: 'same-origin' });
+            if (!res.ok) throw new Error('Request failed with status ' + res.status);
+            return res.json();
+        }
+
+        function batches(items, size) {
+            const out = [];
+            for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+            return out;
+        }
+
+        async function detectionStatus() {
+            // no-store: this is polled repeatedly against the same URL, and a cached response
+            // here means the baseline/final comparison below can silently see "no change" on
+            // a browser that decides to serve it from cache instead of asking the server again.
+            const res = await fetch('@Url.Action("DetectionStatus", "Photos")?eventId=' + eventId,
+                { credentials: 'same-origin', cache: 'no-store' });
+            if (!res.ok) throw new Error('status ' + res.status);
+            return res.json();
+        }
+
+        retryForm.addEventListener('submit', async function (e) {
+            e.preventDefault();
+            retryButton.disabled = true;
+            resultMessage.innerHTML = '';
+            document.getElementById('server-success-message')?.remove();
+            document.getElementById('server-error-message')?.remove();
+
+            let pendingIds;
+            let baseline;
+            try {
+                const res = await fetch('@Url.Action("RetryDetectionPending", "Photos")?eventId=' + eventId,
+                    { credentials: 'same-origin', cache: 'no-store' });
+                if (!res.ok) throw new Error('status ' + res.status);
+                pendingIds = (await res.json()).photoIds;
+                baseline = await detectionStatus(); // snapshot so the final message reports this run's own delta
+            } catch (err) {
+                retryButton.disabled = false;
+                showResult('Could not check which photos need retrying: ' + err.message, true);
+                return;
+            }
+
+            if (pendingIds.length === 0) {
+                retryButton.disabled = false;
+                showResult('Every photo in this event has already been processed.', false);
+                return;
+            }
+
+            progressArea.classList.remove('d-none');
+            progressText.textContent = 'Queueing ' + pendingIds.length + ' photo(s)...';
+
+            // Queueing is instant -- PhotoDetectionWorker does the actual work in the
+            // background -- so batching here is only to keep any one request's id list a
+            // sane size, not to dodge a timeout the way it used to.
+            const groups = batches(pendingIds, batchSize);
+            for (const group of groups) {
+                try {
+                    await postForm(
+                        '@Url.Action("RetryDetectionBatch", "Photos")?eventId=' + eventId,
+                        { photoIds: group });
+                } catch (err) {
+                    showResult('Could not queue detection: ' + err.message, true);
+                    retryButton.disabled = false;
+                    return;
+                }
+            }
+
+            // Clustering runs on its own once the event's queue empties (PhotoDetectionWorker)
+            // -- nothing to trigger here, just watch the same counts it's watching.
+            const total = pendingIds.length;
+            let status;
+            while (true) {
+                try {
+                    status = await detectionStatus();
+                } catch (err) {
+                    showResult('Lost track of progress: ' + err.message + '. Refresh to check again.', true);
+                    retryButton.disabled = false;
+                    return;
+                }
+
+                const done = Math.max(0, total - status.pending);
+                const pct = total > 0 ? Math.round((done / total) * 100) : 100;
+                progressBar.style.width = pct + '%';
+                progressBar.textContent = pct + '%';
+                progressText.textContent = 'Detecting faces -- ' + done + ' of ' + total + ' photos...';
+
+                if (status.pending === 0) break;
+                await new Promise(resolve => setTimeout(resolve, 2000));
+            }
+
+            const recovered = status.processed - baseline.processed;
+            const stillFailing = status.failed - baseline.failed;
+
+            const parts = [];
+            if (recovered > 0) parts.push(recovered + ' photo(s) now have people detected');
+            if (stillFailing > 0) {
+                parts.push(stillFailing + ' still failed -- is the person pipeline service running, ' +
+                    'or were the original files moved?');
+            }
+
+            let text = (parts.length > 0 ? parts.join('; ') : 'Nothing left to process') + '.';
+            if (recovered > 0) {
+                text += ' <a href="#" id="retry-refresh-link" class="alert-link">Refresh to see the new groups.</a>';
+            }
+            showResult(text, recovered === 0);
+            document.getElementById('retry-refresh-link')?.addEventListener('click', function (evt) {
+                evt.preventDefault();
+                window.location.reload();
+            });
+            retryButton.disabled = false;
+        });
+    })();
+
+    // Searchable "who is this" combobox. One shared attendee list drives every card's
+    // suggestions; typing filters it, and there's always a "create new attendee" row at
+    // the bottom so someone who isn't on the invite list yet is never a dead end.
+    (function () {
+        const eventId = '@eventId';
+        const quickAddUrl = '@Url.Action("QuickAddAttendee", "Clusters", new { eventId = eventId })';
+        const attendees = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(
+            attendees.Select(a => new { id = a.Id, name = a.Name })));
+
+        function escapeHtml(value) {
+            const div = document.createElement('div');
+            div.textContent = value ?? '';
+            return div.innerHTML;
+        }
+
+        document.querySelectorAll('.identify-combo-form').forEach(function (form) {
+            const search = form.querySelector('.combo-search');
+            const suggestions = form.querySelector('.combo-suggestions');
+            const attendeeIdInput = form.querySelector('.combo-attendee-id');
+            const newNameInput = form.querySelector('.combo-new-name');
+            const submitButton = form.querySelector('.combo-submit');
+
+            function closeSuggestions() {
+                suggestions.classList.add('d-none');
+                suggestions.innerHTML = '';
+            }
+
+            function clearSelection() {
+                attendeeIdInput.value = '';
+                newNameInput.value = '';
+                submitButton.disabled = true;
+                submitButton.textContent = 'Identify';
+                form.action = form.dataset.identifyAction || form.action;
+            }
+
+            // The Identify action is the form's natural asp-action target -- remembered here
+            // so the create-new path can swap the action out and this can swap it back.
+            form.dataset.identifyAction = form.action;
+
+            function selectAttendee(attendee) {
+                attendeeIdInput.value = attendee.id;
+                newNameInput.value = '';
+                search.value = attendee.name;
+                form.action = form.dataset.identifyAction;
+                submitButton.disabled = false;
+                submitButton.textContent = 'Identify';
+                closeSuggestions();
+            }
+
+            function createAndLink(typedName) {
+                attendeeIdInput.value = '';
+                newNameInput.value = typedName;
+                form.action = quickAddUrl;
+                closeSuggestions();
+                form.submit();
+            }
+
+            function render(query) {
+                const trimmed = query.trim();
+                if (trimmed === '') {
+                    closeSuggestions();
+                    return;
+                }
+
+                const lower = trimmed.toLowerCase();
+                const matches = attendees.filter(a => a.name.toLowerCase().includes(lower)).slice(0, 8);
+
+                suggestions.innerHTML = '';
+                for (const attendee of matches) {
+                    const row = document.createElement('button');
+                    row.type = 'button';
+                    row.className = 'combo-suggestion';
+                    row.textContent = attendee.name;
+                    row.addEventListener('mousedown', function (e) {
+                        e.preventDefault(); // keeps the input's blur from firing before the click
+                        selectAttendee(attendee);
+                    });
+                    suggestions.appendChild(row);
+                }
+
+                const createRow = document.createElement('button');
+                createRow.type = 'button';
+                createRow.className = 'combo-suggestion create-new';
+                createRow.innerHTML = '+ Create new attendee &ldquo;' + escapeHtml(trimmed) + '&rdquo;';
+                createRow.addEventListener('mousedown', function (e) {
+                    e.preventDefault();
+                    createAndLink(trimmed);
+                });
+                suggestions.appendChild(createRow);
+
+                suggestions.classList.remove('d-none');
+            }
+
+            search.addEventListener('input', function () {
+                clearSelection();
+                render(search.value);
+            });
+
+            search.addEventListener('focus', function () {
+                if (search.value.trim() !== '') render(search.value);
+            });
+
+            search.addEventListener('blur', function () {
+                // The mousedown handlers above already ran (and preventDefault stopped this
+                // blur from cancelling their click), so by the time this fires it's safe to close.
+                closeSuggestions();
+            });
+
+            search.addEventListener('keydown', function (e) {
+                if (e.key === 'Escape') closeSuggestions();
+            });
+        });
+    })();
+</script>
+}

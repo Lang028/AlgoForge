@@ -20,15 +20,18 @@ namespace AlgoForge.Controllers
     {
         private readonly AlgoForgeDbContext _db;
         private readonly UserManager<ApplicationUser> _userManager;
+        private readonly SignInManager<ApplicationUser> _signInManager;
         private readonly IEmailSender _emailSender;
 
         public HandoverController(
             AlgoForgeDbContext db,
             UserManager<ApplicationUser> userManager,
+            SignInManager<ApplicationUser> signInManager,
             IEmailSender emailSender)
         {
             _db = db;
             _userManager = userManager;
+            _signInManager = signInManager;
             _emailSender = emailSender;
         }
 
@@ -229,9 +232,31 @@ namespace AlgoForge.Controllers
 
             await _db.SaveChangesAsync();
 
-            TempData["SuccessMessage"] =
-                $"{organisation.Name} now manages {evt.Name}. Sign out and back in if your " +
-                $"role menu looks stale.";
+            // Same reasoning as ClaimController and DelegatesController: the dashboard reads
+            // the sticky ActiveRole claim, not a live membership query, and Coordinator is one
+            // of the two values that claim never lets go of on its own (ResolveActiveRoleAsync
+            // keeps it "remembered" even once it stops matching anything held) -- so someone
+            // who registered as a Photographer and accepts a handover would be stuck on the
+            // photographer dashboard even after signing out and back in, unless this runs.
+            var currentUser = await _userManager.GetUserAsync(User);
+            if (currentUser is not null)
+            {
+                var existingClaim = (await _userManager.GetClaimsAsync(currentUser))
+                    .FirstOrDefault(c => c.Type == "ActiveRole");
+                var newClaim = new System.Security.Claims.Claim("ActiveRole", EventRole.Coordinator.ToString());
+                if (existingClaim is null)
+                {
+                    await _userManager.AddClaimAsync(currentUser, newClaim);
+                    await _signInManager.RefreshSignInAsync(currentUser);
+                }
+                else if (existingClaim.Value != newClaim.Value)
+                {
+                    await _userManager.ReplaceClaimAsync(currentUser, existingClaim, newClaim);
+                    await _signInManager.RefreshSignInAsync(currentUser);
+                }
+            }
+
+            TempData["SuccessMessage"] = $"{organisation.Name} now manages {evt.Name}.";
 
             return RedirectToAction("Index", "Events");
         }

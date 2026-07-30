@@ -18,7 +18,6 @@ namespace AlgoForge.ViewModels.Events
         [EmailAddress]
         public string Email { get; set; } = string.Empty;
 
-        [Required]
         [Display(Name = "Contact info")]
         public string ContactInfo { get; set; } = string.Empty;
 
