@@ -26,10 +26,19 @@ builder.Services.AddControllersWithViews();
 builder.Services.AddScoped<AttendeeImportService>();
 builder.Services.AddScoped<AlgoForge.Services.Authorization.IEventAccessService,
                            AlgoForge.Services.Authorization.EventAccessService>();
-// Demo/dev: email is written to App_Data/outbox and listed on the Outbox page, so invite,
-// claim and connection links are clickable during a presentation. NoOpEmailSender only
-// logged them, which is no use mid-demo. Point this at a real provider before deploying.
-builder.Services.AddScoped<AlgoForge.Services.IEmailSender, AlgoForge.Services.OutboxEmailSender>();
+// Dev/demo: email is written to App_Data/outbox and listed on the Outbox page, so invite,
+// claim and connection links are clickable during a presentation without an SMTP account.
+// Anywhere else, real email goes out over SMTP -- see SmtpEmailSender for what it needs
+// configured (Email:Host/Port/Username/Password, the last two as secrets, never committed).
+if (builder.Environment.IsDevelopment())
+{
+    builder.Services.AddScoped<AlgoForge.Services.IEmailSender, AlgoForge.Services.OutboxEmailSender>();
+}
+else
+{
+    builder.Services.Configure<SmtpEmailOptions>(builder.Configuration.GetSection("Email"));
+    builder.Services.AddScoped<AlgoForge.Services.IEmailSender, SmtpEmailSender>();
+}
 
 builder.Services.AddHttpClient<PersonPipelineService>(client =>
 {
@@ -39,6 +48,13 @@ builder.Services.AddHttpClient<PersonPipelineService>(client =>
     // slower than a single detection call -- a few thousand detections can take minutes.
     client.Timeout = TimeSpan.FromMinutes(10);
 });
+
+// Face detection runs off the request path -- see PhotoDetectionWorker for why. The queue
+// is a singleton (one process, one in-memory list of pending photo ids); the worker itself
+// is registered as a hosted service so it starts with the app and drains the queue for as
+// long as the app runs.
+builder.Services.AddSingleton<PhotoDetectionQueue>();
+builder.Services.AddHostedService<PhotoDetectionWorker>();
 
 // Stops LocalDB idling itself out from under the running app -- see LocalDbKeepAlive.
 // Development only: a real database server does not go to sleep.
@@ -100,6 +116,20 @@ if (app.Environment.IsDevelopment())
     {
         await db.Database.EnsureCreatedAsync();
         await DbInitializer.SeedAsync(db, userManager, roleManager);
+    }
+}
+else
+{
+    // Outside Development there is no LocalDB dance and no demo data: a real host's
+    // database doesn't go to sleep, and a demo admin/attendee account has no place in a
+    // real deployment. But migrations still have to run somewhere, or a fresh production
+    // database has zero tables and the very first request throws -- this is that seam,
+    // so a deploy doesn't also require someone to run dotnet-ef by hand against it.
+    using var scope = app.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<AlgoForgeDbContext>();
+    if (db.Database.IsRelational())
+    {
+        await db.Database.MigrateAsync();
     }
 }
 

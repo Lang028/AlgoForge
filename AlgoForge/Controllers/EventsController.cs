@@ -41,11 +41,16 @@ namespace AlgoForge.Controllers
                 return Challenge();
             }
 
-            var eventIds = await _db.EventMemberships
+            var memberships = await _db.EventMemberships
                 .Where(m => m.UserId == userId)
-                .Select(m => m.EventId)
-                .Distinct()
+                .Select(m => new { m.EventId, m.Role })
                 .ToListAsync();
+
+            var rolesByEvent = memberships
+                .GroupBy(m => m.EventId)
+                .ToDictionary(g => g.Key, g => g.Select(m => m.Role).ToList());
+
+            var eventIds = rolesByEvent.Keys.ToList();
 
             var events = await _db.Events
                 .Where(e => eventIds.Contains(e.Id))
@@ -66,6 +71,13 @@ namespace AlgoForge.Controllers
                     AttendeeCount = e.Attendees.Count
                 })
                 .ToListAsync();
+
+            foreach (var card in events)
+            {
+                card.ViewerRoles = rolesByEvent.TryGetValue(card.Id, out var roles)
+                    ? roles
+                    : new List<EventRole>();
+            }
 
             // Covers are served through the authorising Photos/File action rather than a
             // public /uploads URL, so the link is built once the rows are materialised.

@@ -15,11 +15,14 @@ namespace AlgoForge.Controllers
     {
         private readonly AlgoForgeDbContext _db;
         private readonly UserManager<ApplicationUser> _userManager;
+        private readonly SignInManager<ApplicationUser> _signInManager;
 
-        public ClaimController(AlgoForgeDbContext db, UserManager<ApplicationUser> userManager)
+        public ClaimController(
+            AlgoForgeDbContext db, UserManager<ApplicationUser> userManager, SignInManager<ApplicationUser> signInManager)
         {
             _db = db;
             _userManager = userManager;
+            _signInManager = signInManager;
         }
 
         [HttpGet]
@@ -70,6 +73,29 @@ namespace AlgoForge.Controllers
             }
 
             await _db.SaveChangesAsync();
+
+            // The dashboard and top nav read the ActiveRole claim, not a live membership
+            // query (AccountController.ResolveActiveRoleAsync), so without this someone who
+            // registered as a Coordinator/Photographer and then claims an attendee invite
+            // stays on the staff-facing dashboard forever -- that claim is sticky by design
+            // and a plain login never revisits it once it is set to a staff role.
+            var user = await _userManager.GetUserAsync(User);
+            if (user is not null)
+            {
+                var existingClaim = (await _userManager.GetClaimsAsync(user))
+                    .FirstOrDefault(c => c.Type == "ActiveRole");
+                var newClaim = new System.Security.Claims.Claim("ActiveRole", EventRole.Attendee.ToString());
+                if (existingClaim is null)
+                {
+                    await _userManager.AddClaimAsync(user, newClaim);
+                    await _signInManager.RefreshSignInAsync(user);
+                }
+                else if (existingClaim.Value != newClaim.Value)
+                {
+                    await _userManager.ReplaceClaimAsync(user, existingClaim, newClaim);
+                    await _signInManager.RefreshSignInAsync(user);
+                }
+            }
 
             return RedirectToAction("Index", "Tags", new { eventId = attendee.EventId });
         }

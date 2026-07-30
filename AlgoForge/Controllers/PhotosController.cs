@@ -16,6 +16,7 @@ namespace AlgoForge.Controllers
     {
         private readonly AlgoForgeDbContext _db;
         private readonly PersonPipelineService _pipeline;
+        private readonly PhotoDetectionQueue _detectionQueue;
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly IWebHostEnvironment _env;
         private readonly ILogger<PhotosController> _logger;
@@ -24,6 +25,7 @@ namespace AlgoForge.Controllers
         public PhotosController(
             AlgoForgeDbContext db,
             PersonPipelineService pipeline,
+            PhotoDetectionQueue detectionQueue,
             UserManager<ApplicationUser> userManager,
             IWebHostEnvironment env,
             ILogger<PhotosController> logger,
@@ -31,6 +33,7 @@ namespace AlgoForge.Controllers
         {
             _db = db;
             _pipeline = pipeline;
+            _detectionQueue = detectionQueue;
             _userManager = userManager;
             _env = env;
             _logger = logger;
@@ -71,19 +74,9 @@ namespace AlgoForge.Controllers
                 return Challenge();
             }
 
-            var (uploaded, skipped, detectionFailures) = await StoreAndDetectAsync(eventId, userId, files);
-
-            // One clustering pass for the whole batch. A pipeline outage must not lose the
-            // uploaded photos: they are already saved and can be re-clustered from the
-            // review grid once the service is back.
-            if (uploaded > 0 && !await TryReclusterAsync(eventId))
-            {
-                AddErrorMessage(
-                    "Photos uploaded, but grouping people failed. Use Re-cluster on the identify page to retry.");
-            }
+            var (uploaded, skipped) = await StoreAndDetectAsync(eventId, userId, files);
 
             ReportOutcome(uploaded, skipped);
-            ReportDetectionFailures(detectionFailures);
             return RedirectToAction(nameof(Index), new { eventId });
         }
 
@@ -121,22 +114,26 @@ namespace AlgoForge.Controllers
                 return Unauthorized();
             }
 
-            var (uploaded, skipped, detectionFailures) = await StoreAndDetectAsync(eventId, userId, files);
-            return Json(new { uploaded, skipped, detectionFailures });
+            var (uploaded, skipped) = await StoreAndDetectAsync(eventId, userId, files);
+            return Json(new { uploaded, skipped });
         }
 
-        // Runs the single clustering pass once the last batch has landed, and records the
-        // run's totals for the gallery to show.
+        // Records the run's totals for the gallery to show, once the last batch has landed.
         //
         // The tallies come back from the client because they were accumulated across many
         // requests and no single one of them knows the whole story. They are display-only --
         // nothing is authorised or written from them -- so a client that reports nonsense
         // only misleads itself about its own upload.
+        //
+        // Clustering used to run here too, once per whole upload. It no longer does: detection
+        // itself is now a background queue (PhotoDetectionWorker), so the photos this call
+        // reports on may not be detected yet, and clustering them now would just cluster
+        // whatever happened to finish first. The worker triggers clustering itself once the
+        // event's queue is actually empty.
         [HttpPost]
         [ValidateAntiForgeryToken]
         [RequireEventRole(EventRole.Photographer)]
-        public async Task<IActionResult> FinishUpload(
-            Guid eventId, int uploaded, List<string>? skipped, int detectionFailures = 0)
+        public async Task<IActionResult> FinishUpload(Guid eventId, int uploaded, List<string>? skipped)
         {
             var evt = await _db.Events.FindAsync(eventId);
             if (evt is null)
@@ -144,27 +141,14 @@ namespace AlgoForge.Controllers
                 return NotFound();
             }
 
-            var clustered = true;
-            if (uploaded > 0)
-            {
-                clustered = await TryReclusterAsync(eventId);
-            }
-
             ReportOutcome(uploaded, skipped ?? new List<string>());
-            ReportDetectionFailures(detectionFailures);
 
-            if (!clustered)
-            {
-                AddErrorMessage(
-                    "Photos uploaded, but grouping people failed. Use Re-cluster on the identify page to retry.");
-            }
-
-            return Json(new { clustered });
+            return Json(new { uploaded });
         }
 
-        // Stores each accepted file and runs detection on it. Shared by the plain form post
-        // and the batched folder upload so both apply exactly the same validation.
-        private async Task<(int Uploaded, List<string> Skipped, int DetectionFailures)> StoreAndDetectAsync(
+        // Stores each accepted file and queues it for detection. Shared by the plain form
+        // post and the batched folder upload so both apply exactly the same validation.
+        private async Task<(int Uploaded, List<string> Skipped)> StoreAndDetectAsync(
             Guid eventId, Guid userId, List<IFormFile>? files)
         {
             // Model binding leaves this null when the form carries no file part at all,
@@ -183,7 +167,6 @@ namespace AlgoForge.Controllers
 
             var uploaded = 0;
             var skipped = new List<string>();
-            var detectionFailures = 0;
 
             foreach (var file in files)
             {
@@ -220,47 +203,36 @@ namespace AlgoForge.Controllers
 
                 _db.Photos.Add(photo);
 
-                // Saved before detection runs, not after. Detection is the slow part -- a
-                // network round trip to Python, seconds per photo -- and holding an unsaved
-                // row across it meant a database hiccup during that gap lost a photo that
-                // was already safely on disk. LocalDB stopping itself while idle is exactly
-                // that hiccup, and it is why the connection is configured to retry at all.
+                // Saved before detection runs, not after. A database hiccup during detection
+                // must not lose a photo that is already safely on disk. LocalDB stopping
+                // itself while idle is exactly that hiccup, and it is why the connection is
+                // configured to retry at all.
                 await _db.SaveChangesAsync();
 
-                // Detection only -- no clustering here. Clustering is per-event and runs
-                // once after the batch, which is both correct (photo 1 can now be grouped
-                // using evidence from photo 300) and far cheaper than the old
-                // re-cluster-per-photo approach.
-                //
-                // Still synchronous, and still the wrong place for this: D16 says never in
-                // the request path. The seam to fix it is right here -- enqueue instead of
-                // awaiting.
-                var detectionSucceeded = await _pipeline.ProcessPhotoAsync(photo, filePath);
-                if (!detectionSucceeded)
-                {
-                    detectionFailures++;
-                }
-
-                // Second save persists the detections and the processing status. If this
-                // one fails the photograph itself is already stored and can be reprocessed;
-                // it no longer takes the whole upload down with it.
-                await _db.SaveChangesAsync();
+                // Detection runs off this request entirely (PhotoDetectionWorker) -- the row
+                // is saved with FaceProcessingStatus.Pending and the queue is what moves it
+                // to Processed or Failed. Clustering follows automatically once the whole
+                // event's queue drains, not from here.
+                _detectionQueue.Enqueue(photo.Id);
                 uploaded++;
             }
 
-            return (uploaded, skipped, detectionFailures);
+            return (uploaded, skipped);
         }
 
         // POST /Photos/{eventId}/RetryDetection
         //
-        // Runs detection again over the photos in an event that never got any. Until this
+        // Queues detection again for the photos in an event that never got any. Until this
         // existed, a photo uploaded while the Python service was down was stuck: detection
         // only ran on the upload path, and Re-cluster cannot help because it groups
         // existing detections rather than creating them. The only remedy was deleting the
         // photographs and uploading them a second time.
         //
-        // The originals are already on disk, so re-running detection is simply a matter of
-        // reading them back. Photos that already succeeded are left alone.
+        // This is also the no-JavaScript fallback for the identify page's progress bar (see
+        // RetryDetectionPending/Batch below). It used to be the ONLY path, and used to block
+        // the request until every photo was done -- minutes, for a few hundred photos, with
+        // nothing on screen. Now it just enqueues and redirects immediately; the background
+        // worker does the rest regardless of which path queued the work.
         [HttpPost]
         [Route("Photos/{eventId}/RetryDetection")]
         [ValidateAntiForgeryToken]
@@ -279,73 +251,105 @@ namespace AlgoForge.Controllers
                 return RedirectToAction("Index", "Clusters", new { eventId });
             }
 
-            var recovered = 0;
-            var stillFailing = 0;
-            var missingFiles = 0;
+            // See RetryDetectionBatch for why this flips to Pending rather than just enqueueing:
+            // a retried photo starts at Failed, and DetectionStatus needs Pending to mean
+            // "queued or in flight" for a retry the same way it already does for an upload.
+            foreach (var photo in pending)
+            {
+                photo.FaceProcessingStatus = PhotoFaceProcessingStatus.Pending;
+            }
+            await _db.SaveChangesAsync();
 
             foreach (var photo in pending)
             {
-                var path = ResolveStoredPath(photo);
-                if (path is null)
-                {
-                    // The row survived but the file did not -- nothing to re-read.
-                    missingFiles++;
-                    continue;
-                }
-
-                if (await _pipeline.ProcessPhotoAsync(photo, path))
-                {
-                    recovered++;
-                }
-                else
-                {
-                    stillFailing++;
-                }
-
-                // Saved per photo rather than once at the end: this loop can run for
-                // minutes over a few hundred photographs, and a failure halfway through
-                // should keep the work already done.
-                await _db.SaveChangesAsync();
+                _detectionQueue.Enqueue(photo.Id);
             }
 
-            if (recovered > 0 && !await TryReclusterAsync(eventId))
-            {
-                AddErrorMessage(
-                    $"Detection recovered {recovered} photo(s), but grouping them failed. Try Re-cluster.");
-                return RedirectToAction("Index", "Clusters", new { eventId });
-            }
-
-            var parts = new List<string>();
-            if (recovered > 0) parts.Add($"{recovered} photo(s) now have people detected");
-            if (stillFailing > 0) parts.Add($"{stillFailing} still failed -- is the person pipeline service running?");
-            if (missingFiles > 0) parts.Add($"{missingFiles} had no file on disk");
-
-            var summary = string.Join("; ", parts) + ".";
-
-            if (recovered > 0)
-            {
-                TempData["SuccessMessage"] = summary;
-            }
-            else
-            {
-                AddErrorMessage(summary);
-            }
-
+            TempData["SuccessMessage"] =
+                $"Detection queued for {pending.Count} photo(s) -- refresh this page in a bit to see the new groups.";
             return RedirectToAction("Index", "Clusters", new { eventId });
         }
 
-        private async Task<bool> TryReclusterAsync(Guid eventId)
+        // --- Retry detection, polled for a progress bar ----------------------------
+        //
+        // The plain RetryDetection action above stays as the no-JavaScript fallback. With
+        // JavaScript the identify page instead asks for the pending photo ids, queues them,
+        // then polls DetectionStatus until the event's queue is empty -- there is nothing
+        // left here to block on or batch for timeout reasons, since queueing is instant;
+        // the batching that remains is just to keep any one request's photoIds list modest.
+        [HttpGet]
+        [RequireEventRole(EventRole.Coordinator, EventRole.Photographer)]
+        public async Task<IActionResult> RetryDetectionPending(Guid eventId)
         {
-            try
+            var photoIds = await _db.Photos
+                .Where(p => p.EventId == eventId
+                            && p.Status == PhotoStatus.Visible
+                            && p.FaceProcessingStatus != PhotoFaceProcessingStatus.Processed)
+                .Select(p => p.Id)
+                .ToListAsync();
+
+            return Json(new { photoIds });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        [RequireEventRole(EventRole.Coordinator, EventRole.Photographer)]
+        public async Task<IActionResult> RetryDetectionBatch(Guid eventId, List<Guid> photoIds)
+        {
+            photoIds ??= new List<Guid>();
+
+            // Re-validated against the event rather than trusted: the id list is client
+            // supplied, and this is the only thing standing between a crafted request and
+            // queueing detection for a photo in a different event.
+            var photos = await _db.Photos
+                .Where(p => p.EventId == eventId
+                            && photoIds.Contains(p.Id)
+                            && p.Status == PhotoStatus.Visible
+                            && p.FaceProcessingStatus != PhotoFaceProcessingStatus.Processed)
+                .ToListAsync();
+
+            // A retried photo is sitting at Failed, not Pending -- enqueueing alone doesn't
+            // change that row, so DetectionStatus (and the progress bar polling it) would see
+            // nothing "pending" until the worker actually gets to it. Marking it Pending here,
+            // the moment it's queued, is what makes "pending" mean "queued or in flight" for a
+            // retry the same way it already does for a fresh upload.
+            foreach (var photo in photos)
             {
-                await _pipeline.ReclusterEventAsync(eventId);
-                return true;
+                photo.FaceProcessingStatus = PhotoFaceProcessingStatus.Pending;
             }
-            catch (Exception ex)
+            await _db.SaveChangesAsync();
+
+            foreach (var photo in photos)
             {
-                _logger.LogError(ex, "Clustering failed for event {EventId} after upload.", eventId);
-                return false;
+                _detectionQueue.Enqueue(photo.Id);
             }
+
+            return Json(new { enqueued = photos.Count });
+        }
+
+        // Polled by both the upload page and the identify page's retry-detection progress
+        // bar: "how much of this event's queue is left" is the same question either way,
+        // and the answer lives entirely on the Photos rows -- no separate job-tracking state
+        // to keep in sync with them.
+        [HttpGet]
+        [RequireEventRole(EventRole.Coordinator, EventRole.Photographer)]
+        public async Task<IActionResult> DetectionStatus(Guid eventId)
+        {
+            var counts = await _db.Photos
+                .Where(p => p.EventId == eventId && p.Status == PhotoStatus.Visible)
+                .GroupBy(p => p.FaceProcessingStatus)
+                .Select(g => new { Status = g.Key, Count = g.Count() })
+                .ToListAsync();
+
+            int CountOf(PhotoFaceProcessingStatus status) =>
+                counts.FirstOrDefault(c => c.Status == status)?.Count ?? 0;
+
+            return Json(new
+            {
+                pending = CountOf(PhotoFaceProcessingStatus.Pending),
+                processed = CountOf(PhotoFaceProcessingStatus.Processed),
+                failed = CountOf(PhotoFaceProcessingStatus.Failed)
+            });
         }
 
         // Says what actually happened to the selection. Silence here is what made the old
@@ -360,6 +364,10 @@ namespace AlgoForge.Controllers
                 {
                     message += $" {skipped.Count} file(s) skipped.";
                 }
+
+                // Detection and clustering now run in the background (PhotoDetectionWorker)
+                // rather than being held open on this request -- see that class for why.
+                message += " Detecting faces in the background -- refresh in a bit to see the new groups.";
 
                 TempData["SuccessMessage"] = message;
             }
@@ -387,18 +395,6 @@ namespace AlgoForge.Controllers
             AddErrorMessage(uploaded > 0
                 ? detail
                 : $"Nothing was uploaded. {detail}");
-        }
-
-        private void ReportDetectionFailures(int detectionFailures)
-        {
-            if (detectionFailures <= 0)
-            {
-                return;
-            }
-
-            AddErrorMessage(
-                $"{detectionFailures} photo(s) uploaded, but person detection failed. " +
-                "Start the person pipeline service before uploading photos; these photos have no face detections yet.");
         }
 
         private void AddErrorMessage(string message)
@@ -547,23 +543,9 @@ namespace AlgoForge.Controllers
         }
 
         // BlobUrl is "/uploads/{eventId}/{fileName}" -- map it back onto App_Data/uploads.
-        private string? ResolveStoredPath(Photo photo)
-        {
-            var relative = photo.BlobUrl.StartsWith("/uploads/")
-                ? photo.BlobUrl["/uploads/".Length..]
-                : photo.BlobUrl.TrimStart('/');
-
-            var root = Path.Combine(_env.ContentRootPath, "App_Data", "uploads");
-            var full = Path.GetFullPath(Path.Combine(root, relative.Replace('/', Path.DirectorySeparatorChar)));
-
-            // Never let a stored value escape the uploads root.
-            if (!full.StartsWith(Path.GetFullPath(root), StringComparison.OrdinalIgnoreCase))
-            {
-                return null;
-            }
-
-            return System.IO.File.Exists(full) ? full : null;
-        }
+        // Shared with PhotoDetectionWorker (background detection), which is why this is a
+        // thin wrapper over PhotoStorage rather than its own copy of the guard.
+        private string? ResolveStoredPath(Photo photo) => PhotoStorage.ResolveStoredPath(_env, photo);
 
         private static string ContentTypeFor(string path) =>
             Path.GetExtension(path).ToLowerInvariant() switch
