@@ -102,31 +102,6 @@ body {
     overflow: hidden;
 }
 
-.gk-hero::before,
-.gk-hero::after {
-    content: "";
-    position: absolute;
-    border-radius: 50%;
-    filter: blur(60px);
-    opacity: .45;
-}
-
-.gk-hero::before {
-    width: 220px;
-    height: 220px;
-    background: var(--gk-coral);
-    top: -80px;
-    right: -60px;
-}
-
-.gk-hero::after {
-    width: 190px;
-    height: 190px;
-    background: var(--gk-violet);
-    bottom: -90px;
-    left: 28%;
-}
-
 .gk-hero > * {
     position: relative;
     z-index: 1;
@@ -209,7 +184,7 @@ body {
 }
 
 .gk-btn-violet:hover {
-    background: #0c7d72;
+    background: #374151;
     color: #fff;
 }
 
@@ -264,7 +239,7 @@ body {
 .gk-form .form-select:focus {
     background: #fff;
     border-color: var(--gk-coral);
-    box-shadow: 0 0 0 .2rem rgba(244, 80, 42, .12);
+    box-shadow: 0 0 0 .2rem rgba(14, 165, 233, .12);
 }
 
 .gk-form .form-check-input:checked {

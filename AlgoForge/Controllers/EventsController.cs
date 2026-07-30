@@ -285,7 +285,7 @@ namespace AlgoForge.Controllers
                 EventId = eventId,
                 Name = model.Name,
                 Email = model.Email,
-                ContactInfo = model.ContactInfo,
+                ContactInfo = model.ContactInfo ?? string.Empty,
                 InviteToken = Guid.NewGuid().ToString("N")
             };
 
@@ -369,7 +369,7 @@ namespace AlgoForge.Controllers
             // crafted post could overwrite InviteToken, ClaimedByUserId, or ContactsVisible.
             attendee.Name = model.Name;
             attendee.Email = model.Email;
-            attendee.ContactInfo = model.ContactInfo;
+            attendee.ContactInfo = model.ContactInfo ?? string.Empty;
 
             // Rule: an unclaimed attendee's invite token is only as trustworthy as the
             // email it was sent to, so a changed email invalidates the old link. Once

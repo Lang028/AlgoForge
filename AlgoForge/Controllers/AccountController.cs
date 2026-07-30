@@ -68,7 +68,7 @@ namespace AlgoForge.Controllers
                 // through as the display name rather than asking for a personal one too.
                 DisplayName = signingUpAsOrganisation
                     ? model.OrganisationName!.Trim()
-                    : model.DisplayName.Trim()
+                    : model.DisplayName!.Trim()
             };
 
             var result = await _userManager.CreateAsync(user, model.Password);

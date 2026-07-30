@@ -38,31 +38,6 @@
         justify-content: space-between;
     }
 
-    .auth-brand::before,
-    .auth-brand::after {
-        content: "";
-        position: absolute;
-        border-radius: 50%;
-        filter: blur(70px);
-        opacity: .5;
-    }
-
-    .auth-brand::before {
-        width: 240px;
-        height: 240px;
-        background: #0ea5e9;
-        top: -70px;
-        right: -70px;
-    }
-
-    .auth-brand::after {
-        width: 220px;
-        height: 220px;
-        background: #0ea5e9;
-        bottom: -80px;
-        left: -60px;
-    }
-
     .auth-brand > * { position: relative; z-index: 1; }
 
     .auth-logo {
@@ -144,7 +119,7 @@
     .auth-form .form-control:focus {
         background: #fff;
         border-color: #0ea5e9;
-        box-shadow: 0 0 0 .2rem rgba(124, 92, 252, .12);
+        box-shadow: 0 0 0 .2rem rgba(14, 165, 233, .12);
     }
 
     .btn-auth {
@@ -351,7 +326,7 @@
             </form>
 
             <div class="auth-alt">
-                Already have an account? <a asp-action="Login">Sign in</a>
+                Already have an account? <a asp-action="Login" asp-route-returnUrl="@ViewData["ReturnUrl"]">Sign in</a>
             </div>
         </div>
     </div>

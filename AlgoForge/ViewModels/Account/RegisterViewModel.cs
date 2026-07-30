@@ -27,8 +27,16 @@ namespace AlgoForge.ViewModels.Account
         // organisation's name -- that is what appears on their events, so asking for a
         // personal name and then never using it would be pointless. Validated in the
         // controller, which knows which of the two was chosen.
+        //
+        // Deliberately nullable. The project builds with <Nullable>enable</Nullable>, and
+        // ASP.NET Core treats a non-nullable reference type as implicitly [Required] --
+        // no attribute needed. That made an organisation sign-up impossible: the full-name
+        // input is hidden for that path but still posts an empty string, which failed the
+        // implicit rule with "The Full name field is required" before the conditional
+        // check below in the controller ever got a say. Same reasoning for
+        // OrganisationName, which is nullable for the mirror-image reason.
         [Display(Name = "Full name")]
-        public string DisplayName { get; set; } = string.Empty;
+        public string? DisplayName { get; set; }
 
         /// <summary>Only used when signing up as an organisation.</summary>
         [Display(Name = "Organisation name")]
