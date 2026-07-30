@@ -12,7 +12,7 @@ namespace AlgoForge.ViewModels.Events
         public DateTime EventDate { get; set; }
         public EventStatus Status { get; set; }
 
-        /// <summary>First visible photo of the event; null shows a gradient placeholder.</summary>
+        /// <summary>First visible photo of the event; null shows a flat-colour placeholder.</summary>
         public Guid? CoverPhotoId { get; set; }
 
         /// <summary>Link to the authorising Photos/File action for <see cref="CoverPhotoId"/>.</summary>

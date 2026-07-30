@@ -42,14 +42,14 @@ namespace AlgoForge.Services
             var linked = System.Text.RegularExpressions.Regex.Replace(
                 encodedBody,
                 @"https?://[^\s<]+",
-                m => $"<a href=\"{m.Value}\" style=\"color:#c1502e;font-weight:600;\">{m.Value}</a>");
+                m => $"<a href=\"{m.Value}\" style=\"color:#0ea5e9;font-weight:600;\">{m.Value}</a>");
 
             return $"""
                 <!doctype html>
                 <html><head><meta charset="utf-8" /><title>{WebUtility.HtmlEncode(subject)}</title></head>
                 <body style="margin:0;background:#f4f4f8;font-family:Segoe UI,Arial,sans-serif;">
                   <div style="max-width:620px;margin:28px auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 12px 32px rgba(20,20,28,.10);">
-                    <div style="background:#c1502e;color:#fff;padding:20px 26px;">
+                    <div style="background:#0ea5e9;color:#fff;padding:20px 26px;">
                       <div style="font-size:1.25rem;font-weight:700;">Geeked On.</div>
                     </div>
                     <div style="padding:24px 26px;">
