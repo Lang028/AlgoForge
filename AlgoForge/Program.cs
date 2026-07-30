@@ -17,31 +17,52 @@ var connectionString = builder.Configuration.GetConnectionString("DefaultConnect
 builder.Services.AddDbContext<AlgoForgeDbContext>(options =>
     options.UseSqlServer(connectionString, sql => sql.EnableRetryOnFailure()));
 
-builder.Services.AddIdentity<ApplicationUser, IdentityRole<Guid>>()
+// ASP.NET Core Identity
+builder.Services.AddIdentity<ApplicationUser, IdentityRole<Guid>>(options =>
+{
+    // Development only: allows short demo passwords like "2345"
+    // while presenting.
+    if (builder.Environment.IsDevelopment())
+    {
+        options.Password.RequiredLength = 4;
+        options.Password.RequireDigit = false;
+        options.Password.RequireLowercase = false;
+        options.Password.RequireUppercase = false;
+        options.Password.RequireNonAlphanumeric = false;
+    }
+})
     .AddEntityFrameworkStores<AlgoForgeDbContext>()
     .AddDefaultTokenProviders();
 
 builder.Services.AddAuthorization();
 builder.Services.AddControllersWithViews();
-builder.Services.AddScoped<AttendeeImportService>();
-builder.Services.AddScoped<AlgoForge.Services.Authorization.IEventAccessService,
-                           AlgoForge.Services.Authorization.EventAccessService>();
-// Demo/dev: email is written to App_Data/outbox and listed on the Outbox page, so invite,
-// claim and connection links are clickable during a presentation. NoOpEmailSender only
-// logged them, which is no use mid-demo. Point this at a real provider before deploying.
-builder.Services.AddScoped<AlgoForge.Services.IEmailSender, AlgoForge.Services.OutboxEmailSender>();
 
+builder.Services.AddScoped<AttendeeImportService>();
+
+builder.Services.AddScoped<
+    AlgoForge.Services.Authorization.IEventAccessService,
+    AlgoForge.Services.Authorization.EventAccessService>();
+
+// REAL EMAIL SENDER
+// Emails will now be sent through SMTP instead of being written
+// to App_Data/outbox.
+builder.Services.AddScoped<
+    AlgoForge.Services.IEmailSender,
+    AlgoForge.Services.SmtpEmailSender>();
+
+// Person pipeline
 builder.Services.AddHttpClient<PersonPipelineService>(client =>
 {
-    var baseUrl = builder.Configuration["PersonPipeline:BaseUrl"] ?? "http://127.0.0.1:8000";
+    var baseUrl = builder.Configuration["PersonPipeline:BaseUrl"]
+        ?? "http://127.0.0.1:8000";
+
     client.BaseAddress = new Uri(baseUrl);
-    // Clustering is O(n^2) over an event's detections and runs on CPU, so it is far
-    // slower than a single detection call -- a few thousand detections can take minutes.
+
+    // Clustering is CPU intensive and may take several minutes.
     client.Timeout = TimeSpan.FromMinutes(10);
 });
 
-// Stops LocalDB idling itself out from under the running app -- see LocalDbKeepAlive.
-// Development only: a real database server does not go to sleep.
+// LocalDB keep-alive
 if (builder.Environment.IsDevelopment())
 {
     builder.Services.AddHostedService<LocalDbKeepAlive>();
@@ -52,54 +73,51 @@ var app = builder.Build();
 if (app.Environment.IsDevelopment())
 {
     using var scope = app.Services.CreateScope();
-    var db = scope.ServiceProvider.GetRequiredService<AlgoForgeDbContext>();
-    var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
-    var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole<Guid>>>();
-    // Create/upgrade the local dev database before seeding, so a fresh clone works
-    // without needing the dotnet-ef tool installed.
-    //
-    // Guarded because the integration tests boot this same Program against an in-memory
-    // provider, which has no notion of migrations -- unguarded, MigrateAsync throws before
-    // any test gets to run, and the failure looks like a broken test rather than a
-    // provider mismatch. EnsureCreated covers the in-memory case.
+
+    var db = scope.ServiceProvider
+        .GetRequiredService<AlgoForgeDbContext>();
+
+    var userManager = scope.ServiceProvider
+        .GetRequiredService<UserManager<ApplicationUser>>();
+
+    var roleManager = scope.ServiceProvider
+        .GetRequiredService<RoleManager<IdentityRole<Guid>>>();
+
+    // Create/upgrade the local development database.
     if (db.Database.IsRelational())
     {
-        // LocalDB stops itself when idle, and occasionally leaves an orphaned process behind
-        // that no longer answers. Both land here as an unhandled SqlException before the app
-        // has started, which reads as an application bug rather than a stopped database, so
-        // the instance is woken (and un-wedged) first. Development-only, LocalDB-only.
-        var startupLogger = app.Services.GetRequiredService<ILoggerFactory>()
+        var startupLogger = app.Services
+            .GetRequiredService<ILoggerFactory>()
             .CreateLogger("AlgoForge.Startup");
+
         DevDatabaseStartup.UseConnectionString(connectionString);
 
         if (await DevDatabaseStartup.EnsureAvailableAsync(db, startupLogger))
         {
             await db.Database.MigrateAsync();
-            await DbInitializer.SeedAsync(db, userManager, roleManager);
+
+            await DbInitializer.SeedAsync(
+                db,
+                userManager,
+                roleManager);
         }
         else
         {
-            // Deliberately NOT fatal any more.
-            //
-            // This used to `return`, which ends the process -- and Visual Studio reports
-            // that as "Unable to connect to web server 'AlgoForge'. The web server is no
-            // longer running", which says nothing about a database and sends you looking
-            // for a bug in the app. Worse, recovering meant starting the whole thing again.
-            //
-            // Starting anyway is the better trade: the site comes up, the reason is on
-            // screen and in the log, and because the connection retries on failure the app
-            // heals by itself the moment LocalDB is back -- no restart, no F5.
             startupLogger.LogError(
                 "The database is unreachable, so migrations and seeding were skipped. " +
-                "The site will start, but pages that read data will fail until LocalDB is " +
-                "back. It should recover on its own; if it does not, run: " +
+                "The site will start, but pages that read data may fail until LocalDB is back. " +
+                "If necessary, run: " +
                 "sqllocaldb stop mssqllocaldb -k  then  sqllocaldb start mssqllocaldb");
         }
     }
     else
     {
         await db.Database.EnsureCreatedAsync();
-        await DbInitializer.SeedAsync(db, userManager, roleManager);
+
+        await DbInitializer.SeedAsync(
+            db,
+            userManager,
+            roleManager);
     }
 }
 
@@ -112,15 +130,12 @@ if (!app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 app.UseStaticFiles();
 
-// Uploaded photos live in App_Data/uploads, outside wwwroot, so that dev-time file
-// watchers (dotnet watch, Visual Studio hot reload) don't treat every upload as a source
-// change and restart or refresh the app mid-upload.
-//
-// They are deliberately NOT mapped to a static-file route. A provider on /uploads served
-// every private event's pictures to anyone holding the URL, with no account and no
-// membership check -- events are private by default, so the bytes go through
-// PhotosController.File, which checks membership of the photo's event on every request.
-var uploadsRoot = Path.Combine(app.Environment.ContentRootPath, "App_Data", "uploads");
+// Uploaded photos live in App_Data/uploads, outside wwwroot.
+var uploadsRoot = Path.Combine(
+    app.Environment.ContentRootPath,
+    "App_Data",
+    "uploads");
+
 Directory.CreateDirectory(uploadsRoot);
 
 app.UseRouting();

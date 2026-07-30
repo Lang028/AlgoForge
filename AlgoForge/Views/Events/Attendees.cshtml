@@ -67,6 +67,14 @@ else
                                 <form method="post" asp-action="SendInvite" asp-route-eventId="@eventId" asp-route-attendeeId="@attendee.Id">
                                     <button type="submit" class="btn gk-btn-coral gk-btn-sm">Send invite</button>
                                 </form>
+                                @* The same link the invite email carries. Surfaced here so it can be opened
+                                   without going via the outbox -- useful when demonstrating the attendee
+                                   side, and when someone says the email never arrived. *@
+                                <button type="button" class="btn gk-btn-soft gk-btn-sm gk-copy-claim"
+                                        data-claim-link="@Url.Action("Claim", "Claim", new { token = attendee.InviteToken }, Context.Request.Scheme)"
+                                        title="Copy this attendee's invite link">
+                                    Copy link
+                                </button>
                                 <a asp-action="EditAttendee" asp-route-eventId="@eventId" asp-route-attendeeId="@attendee.Id"
                                    class="btn gk-btn-soft gk-btn-sm">Edit</a>
                             </div>
@@ -79,3 +87,31 @@ else
 }
 
 <p class="mt-3"><a class="gk-link" asp-action="Index">&larr; Back to events</a></p>
+
+@section Scripts {
+    <script>
+        // Copy-to-clipboard for the invite links above. An invite link is a single-use
+        // credential -- it is copied on demand rather than printed into the table, so the
+        // list can be shown on a projector without handing every token to the room.
+        document.querySelectorAll('.gk-copy-claim').forEach(function (button) {
+            button.addEventListener('click', async function () {
+                var link = button.dataset.claimLink;
+                var original = button.textContent.trim();
+
+                try {
+                    await navigator.clipboard.writeText(link);
+                    button.textContent = 'Copied';
+                } catch {
+                    // Clipboard access can be refused (permissions, or a non-secure origin).
+                    // Falling back to a prompt keeps the link reachable rather than failing
+                    // silently at the exact moment someone needs it.
+                    window.prompt('Copy this attendee\'s invite link:', link);
+                    button.textContent = original;
+                    return;
+                }
+
+                setTimeout(function () { button.textContent = original; }, 1500);
+            });
+        });
+    </script>
+}
