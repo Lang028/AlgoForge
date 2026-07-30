@@ -40,7 +40,7 @@
     .admin-badge {
         display: inline-block;
         background: rgba(244, 80, 42, .15);
-        color: #c1502e;
+        color: #0ea5e9;
         border: 1px solid rgba(244, 80, 42, .4);
         border-radius: 999px;
         font-size: .65rem;
@@ -62,7 +62,7 @@
         width: 8px;
         height: 8px;
         border-radius: 50%;
-        background: #c1502e;
+        background: #0ea5e9;
         margin-right: .4rem;
     }
 
@@ -83,8 +83,8 @@
 
     .a-card small { color: rgba(255, 255, 255, .55); }
 
-    .a-card .accent-coral { color: #c1502e; }
-    .a-card .accent-violet { color: #c1502e; }
+    .a-card .accent-coral { color: #0ea5e9; }
+    .a-card .accent-violet { color: #0ea5e9; }
 
     .a-panel {
         background: #1d1d28;
@@ -126,8 +126,8 @@
         padding: .25rem .65rem;
     }
 
-    .status-pill.live { background: #c1502e; }
-    .status-pill.draft { background: #c1502e; }
+    .status-pill.live { background: #0ea5e9; }
+    .status-pill.draft { background: #0ea5e9; }
     .status-pill.post { background: #3a3a4a; }
     .status-pill.archived { background: #6b7280; }
 
@@ -196,8 +196,8 @@
                     <h6 class="mb-3">Consent &amp; connections</h6>
                     <div class="tag-strip mb-3">
                         <span><span class="legend-dot" style="background:#e5e7eb"></span>Suggested @Model.SuggestedTags</span>
-                        <span><span class="legend-dot" style="background:#c1502e"></span>Confirmed @Model.ConfirmedTags</span>
-                        <span><span class="legend-dot" style="background:#c1502e"></span>Rejected @Model.RejectedTags</span>
+                        <span><span class="legend-dot" style="background:#0ea5e9"></span>Confirmed @Model.ConfirmedTags</span>
+                        <span><span class="legend-dot" style="background:#0ea5e9"></span>Rejected @Model.RejectedTags</span>
                     </div>
                 </div>
                 <div class="row g-2">
@@ -261,7 +261,7 @@
     <script>
         const dayLabels = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(dayLabels));
         const dayCounts = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(dayCounts));
-        const barColors = dayCounts.map((_, i) => i === dayCounts.length - 1 ? '#c1502e' : '#c1502e');
+        const barColors = dayCounts.map((_, i) => i === dayCounts.length - 1 ? '#0ea5e9' : '#0ea5e9');
 
         new Chart(document.getElementById('adminUploadsChart'), {
             type: 'bar',

@@ -1,18 +1,20 @@
 /* Geeked On design system — shared across every page.
-   Palette: terracotta #c1502e, teal #0f9d8f, ink #14141c, page bg #e9eaee.
+   Palette: sky blue #0ea5e9, grey #4b5563, ink #14141c, page bg #e9eaee.
    Flat colours only — no gradients. */
 
 :root {
-    /* Accent: terracotta. */
-    --gk-accent: #c1502e;
-    --gk-accent-dark: #9c3f24;
-    --gk-accent-soft: #fbe4da;
+    /* Accent: sky blue. The only non-neutral colour in the app -- everything else is
+       grey, black, or white. */
+    --gk-accent: #0ea5e9;
+    --gk-accent-dark: #0284c7;
+    --gk-accent-soft: #e0f2fe;
 
-    /* Second status colour, so pills stay distinguishable from the accent. */
-    --gk-accent-2: #0f9d8f;
+    /* Second status colour, so pills stay distinguishable from the accent -- a plain
+       dark grey rather than a second hue. */
+    --gk-accent-2: #4b5563;
 
     /* Historical names from an earlier palette, kept as aliases because existing rules
-       and views still refer to them; they resolve to the terracotta/teal above. */
+       and views still refer to them; they resolve to the sky blue/grey above. */
     --gk-coral: var(--gk-accent);
     --gk-coral-dark: var(--gk-accent-dark);
     --gk-coral-soft: var(--gk-accent-soft);
