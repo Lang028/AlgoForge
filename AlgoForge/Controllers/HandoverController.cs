@@ -115,8 +115,7 @@ namespace AlgoForge.Controllers
                 $"-- its attendees, tagging and settings.\n\nOpen this link to accept: {acceptUrl}");
 
             TempData["SuccessMessage"] =
-                $"Invite emailed to {invite.Email}. In demo mode it lands in the Outbox; " +
-                $"the link is {acceptUrl}";
+    $"Invite emailed to {invite.Email}. The link is {acceptUrl}";
 
             return RedirectToAction(nameof(Index), new { eventId });
         }

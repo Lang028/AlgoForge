@@ -409,8 +409,8 @@ namespace AlgoForge.Controllers
                 $"Claim your photos and review your tags: {claimUrl}");
 
             TempData["SuccessMessage"] =
-                $"Invite emailed to {attendee.Name}. In demo mode it lands in the Outbox; " +
-                $"the claim link is {claimUrl}";
+     $"Invite emailed to {attendee.Name}. The claim link is {claimUrl}";
+
             return RedirectToAction(nameof(Attendees), new { eventId });
         }
 
