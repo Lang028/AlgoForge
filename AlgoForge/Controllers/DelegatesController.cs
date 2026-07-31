@@ -128,8 +128,7 @@ namespace AlgoForge.Controllers
                 $"answer connection requests -- those stay with {attendee.Name}.");
 
             TempData["SuccessMessage"] =
-                $"Invite emailed to {invite.Name}. In demo mode it lands in the Outbox; " +
-                $"the link is {claimUrl}";
+    $"Invite emailed to {invite.Name}. The link is {claimUrl}";
 
             return RedirectToAction(nameof(Index), new { eventId });
         }
