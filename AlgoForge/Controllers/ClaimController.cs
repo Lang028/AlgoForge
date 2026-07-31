@@ -1,103 +1,103 @@
 using AlgoForge.Data;
 using AlgoForge.Models;
-using AlgoForge.Services;
-using AlgoForge.ViewModels.Claim;
+using AlgoForge.ViewModels.Account;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 namespace AlgoForge.Controllers
 {
-    // D3: the emailed invite link is how a person claims their Attendee record.
+    // D3: the emailed invite link is how a person claims their Attendee record with a
+    // User account.
     //
-    // Deliberately not [Authorize]. The old version required a full password-based sign-in
-    // first, which meant a brand-new attendee -- someone who has never used the app and
-    // never will again after this event -- had to go through Register (choosing a
-    // Coordinator/Photographer role that means nothing to them) before they could see a
-    // single photo. The token in the link already proves they're the person the invite was
-    // sent to; asking them to also prove it with a password they've never set is friction
-    // with no security benefit. So: if they're already signed in, behave as before
-    // (auto-claim onto the current account, unchanged for anyone who already has one). If
-    // not, show a one-field "confirm your email" page instead of a login wall, and sign
-    // them into a passwordless account on a match -- the token plus a correct email is the
-    // credential, permanently, for this flow.
+    // This is deliberately a separate front door from Account/Login. An attendee is not a
+    // member of staff having a bad day with their password -- they followed a link to look
+    // at photographs of themselves, and sending them to a form that asks whether they are
+    // an organisation or a photographer is asking a question they have no way to answer.
+    // So the link lands on the album, behind a gate, and the gate opens on an email plus
+    // the link itself. No password, no role dropdown, no redirect away from the URL they
+    // pasted -- that last part matters, because a link that visibly turns into
+    // /Account/Login reads as "wrong link" to the person holding it.
+    [AllowAnonymous]
     public class ClaimController : Controller
     {
         private readonly AlgoForgeDbContext _db;
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly SignInManager<ApplicationUser> _signInManager;
-        private readonly IWebHostEnvironment _env;
+        private readonly ILogger<ClaimController> _logger;
 
         public ClaimController(
             AlgoForgeDbContext db,
             UserManager<ApplicationUser> userManager,
             SignInManager<ApplicationUser> signInManager,
-            IWebHostEnvironment env)
+            ILogger<ClaimController> logger)
         {
             _db = db;
             _userManager = userManager;
             _signInManager = signInManager;
-            _env = env;
+            _logger = logger;
         }
 
         [HttpGet]
         [Route("Claim/{token}")]
         public async Task<IActionResult> Claim(string token)
         {
-            var attendee = await _db.Attendees.Include(a => a.Event).FirstOrDefaultAsync(a => a.InviteToken == token);
+            var attendee = await _db.Attendees
+                .Include(a => a.Event)
+                .FirstOrDefaultAsync(a => a.InviteToken == token);
+
             if (attendee is null)
             {
                 return View("InviteInvalid");
             }
 
+            // Already signed in: nothing to ask. Finish the claim and go straight through.
             var userIdText = _userManager.GetUserId(User);
-            if (userIdText is null || !Guid.TryParse(userIdText, out var userId))
+            if (userIdText is not null && Guid.TryParse(userIdText, out var signedInUserId))
             {
-                // Not signed in -- the lightweight path. Nothing is granted yet; that only
-                // happens once the email below actually matches.
-                return View("Verify", new ClaimVerifyViewModel
-                {
-                    Token = token,
-                    EventName = attendee.Event?.Name ?? "this event",
-                    InviteUrl = Url.Action(nameof(Claim), "Claim", new { token }, Request.Scheme)!
-                });
+                return await CompleteAsync(attendee, signedInUserId);
             }
 
-            if (attendee.ClaimedByUserId is not null && attendee.ClaimedByUserId != userId)
+            // Anonymous: render the album behind the gate. The token travels in the form so
+            // the URL never changes, even when the gate comes back with an error.
+            return View("Gate", new AttendeeGateViewModel
             {
-                return Forbid();
-            }
-
-            await GrantAndSignInAsync(attendee, userId);
-            return RedirectToAction("Index", "Tags", new { eventId = attendee.EventId });
+                Link = Url.Action(nameof(Claim), "Claim", new { token }, Request.Scheme) ?? token,
+                EventName = attendee.Event?.Name ?? "this event"
+            });
         }
 
-        // POST /Claim/{token}/Verify -- the email confirmation the unauthenticated path above
-        // renders. A match signs the visitor into a passwordless account (creating one if
-        // this is genuinely their first time) rather than asking them to set a password
-        // they'll never be prompted for again.
         [HttpPost]
-        [Route("Claim/{token}/Verify")]
+        [Route("Claim/Enter")]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Verify(string token, string email)
+        public async Task<IActionResult> Enter(AttendeeGateViewModel model)
         {
-            var attendee = await _db.Attendees.Include(a => a.Event).FirstOrDefaultAsync(a => a.InviteToken == token);
-            if (attendee is null)
+            if (!ModelState.IsValid)
             {
-                return View("InviteInvalid");
+                return View("Gate", model);
             }
 
-            var model = new ClaimVerifyViewModel
-            {
-                Token = token,
-                EventName = attendee.Event?.Name ?? "this event",
-                InviteUrl = Url.Action(nameof(Claim), "Claim", new { token }, Request.Scheme)!
-            };
+            var token = ExtractToken(model.Link);
+            var attendee = token is null
+                ? null
+                : await _db.Attendees
+                    .Include(a => a.Event)
+                    .FirstOrDefaultAsync(a => a.InviteToken == token);
 
-            if (!string.Equals(email?.Trim(), attendee.Email, StringComparison.OrdinalIgnoreCase))
+            model.EventName = attendee?.Event?.Name ?? string.Empty;
+
+            // One message for every failure below, on purpose. Saying "that email is not on
+            // the guest list" would turn this page into a way to test whether a given person
+            // attended -- which is exactly the kind of question the invite list is private to
+            // prevent anyone from answering.
+            if (attendee is null
+                || !string.Equals(attendee.Email, model.Email.Trim(), StringComparison.OrdinalIgnoreCase))
             {
-                model.Error = "That doesn't match the email this invite was sent to.";
-                return View("Verify", model);
+                _logger.LogWarning("Failed attendee gate attempt for token {Token}.", token ?? "(unparseable)");
+                ModelState.AddModelError(string.Empty,
+                    "That email and link don't match an invitation. Check both and try again.");
+                return View("Gate", model);
             }
 
             var user = await _userManager.FindByEmailAsync(attendee.Email);
@@ -105,81 +105,57 @@ namespace AlgoForge.Controllers
             {
                 user = new ApplicationUser
                 {
+                    Id = Guid.NewGuid(),
                     UserName = attendee.Email,
                     Email = attendee.Email,
-                    DisplayName = attendee.Name,
-                    EmailConfirmed = true
+                    EmailConfirmed = true,
+                    DisplayName = attendee.Name
                 };
 
-                // No password: this account's only way in is this same link-plus-email
-                // flow, which is the point -- a one-time attendee never sees a password
-                // field they'd have no reason to remember.
-                var created = await _userManager.CreateAsync(user);
+                // A long random password nobody is ever told. The account is reachable only
+                // through this gate; leaving it passwordless would make it a hole in the
+                // staff login instead.
+                var created = await _userManager.CreateAsync(user, Guid.NewGuid().ToString("N") + "aA1!");
                 if (!created.Succeeded)
                 {
-                    model.Error = "Couldn't create your access -- please try again.";
-                    return View("Verify", model);
+                    _logger.LogError("Could not create attendee account for {Email}: {Errors}",
+                        attendee.Email, string.Join("; ", created.Errors.Select(e => e.Description)));
+                    ModelState.AddModelError(string.Empty,
+                        "Something went wrong opening your album. Please try again.");
+                    return View("Gate", model);
                 }
             }
 
+            var result = await CompleteAsync(attendee, user.Id);
+
+            // Only sign in once the claim has actually succeeded -- Forbid below must not
+            // leave someone signed in as a person whose record they failed to claim.
+            if (result is ForbidResult)
+            {
+                ModelState.AddModelError(string.Empty,
+                    "This invitation has already been claimed by someone else. "
+                    + "Ask the event organiser to send you a new one.");
+                return View("Gate", model);
+            }
+
             await _signInManager.SignInAsync(user, isPersistent: true);
-            await GrantAndSignInAsync(attendee, user.Id);
 
-            return RedirectToAction("Index", "Tags", new { eventId = attendee.EventId });
+            return result;
         }
 
-        // GET /Claim/{token}/Photo/{index} -- background imagery for the verify page above.
-        // Deliberately not the authorising Photos/File action: nobody is signed in yet at
-        // this point. Scoped strictly to the one event this specific token belongs to, which
-        // is no wider than what claiming the invite is about to grant anyway.
-        [HttpGet]
-        [Route("Claim/{token}/Photo/{index:int}")]
-        public async Task<IActionResult> Photo(string token, int index)
-        {
-            var attendee = await _db.Attendees.FirstOrDefaultAsync(a => a.InviteToken == token);
-            if (attendee is null)
-            {
-                return NotFound();
-            }
-
-            var photoIds = await _db.Photos
-                .Where(p => p.EventId == attendee.EventId && p.Status == PhotoStatus.Visible)
-                .OrderBy(p => p.Id) // stable order -- same index means the same photo across the handful of <img> tags on the page
-                .Select(p => p.Id)
-                .ToListAsync();
-
-            if (photoIds.Count == 0)
-            {
-                return NotFound();
-            }
-
-            var photo = await _db.Photos.FindAsync(photoIds[index % photoIds.Count]);
-            var path = photo is null ? null : PhotoStorage.ResolveStoredPath(HttpContext.RequestServices
-                .GetRequiredService<IWebHostEnvironment>(), photo);
-
-            if (path is null)
-            {
-                return NotFound();
-            }
-
-            var contentType = Path.GetExtension(path).ToLowerInvariant() switch
-            {
-                ".png" => "image/png",
-                ".gif" => "image/gif",
-                ".webp" => "image/webp",
-                ".bmp" => "image/bmp",
-                _ => "image/jpeg"
-            };
-
-            return PhysicalFile(path, contentType);
-        }
-
-        private async Task GrantAndSignInAsync(Attendee attendee, Guid userId)
+        // Links the attendee record to the user, grants event membership, and points the
+        // dashboard at the attendee side. Shared by both entry points above: someone already
+        // signed in re-visiting their link, and someone who just passed the gate.
+        private async Task<IActionResult> CompleteAsync(Attendee attendee, Guid userId)
         {
             if (attendee.ClaimedByUserId is null)
             {
                 attendee.ClaimedByUserId = userId;
-                TempData["SuccessMessage"] = "You've claimed your invite. Here are your tags.";
+                TempData["SuccessMessage"] = "You've claimed your invite. Here are your photos.";
+            }
+            else if (attendee.ClaimedByUserId != userId)
+            {
+                return Forbid();
             }
 
             // Claiming is what turns a person record into a member of the event (BUILD_GUIDE
@@ -205,24 +181,50 @@ namespace AlgoForge.Controllers
             // query (AccountController.ResolveActiveRoleAsync), so without this someone who
             // registered as a Coordinator/Photographer and then claims an attendee invite
             // stays on the staff-facing dashboard forever -- that claim is sticky by design
-            // and a plain login never revisits it once it is set to a staff role.
+            // and a plain login never revisits it once it is set to a staff role. Applies to
+            // both callers above: the brand-new gate signup already signs in with this set
+            // via the claim below, but someone who was ALREADY signed in and is just
+            // re-visiting their link needs it applied here too, or they never get it at all.
             var user = await _userManager.FindByIdAsync(userId.ToString());
             if (user is not null)
             {
+                var attendeeClaim = new System.Security.Claims.Claim("ActiveRole", EventRole.Attendee.ToString());
                 var existingClaim = (await _userManager.GetClaimsAsync(user))
                     .FirstOrDefault(c => c.Type == "ActiveRole");
-                var newClaim = new System.Security.Claims.Claim("ActiveRole", EventRole.Attendee.ToString());
+
                 if (existingClaim is null)
                 {
-                    await _userManager.AddClaimAsync(user, newClaim);
+                    await _userManager.AddClaimAsync(user, attendeeClaim);
                     await _signInManager.RefreshSignInAsync(user);
                 }
-                else if (existingClaim.Value != newClaim.Value)
+                else if (existingClaim.Value != attendeeClaim.Value)
                 {
-                    await _userManager.ReplaceClaimAsync(user, existingClaim, newClaim);
+                    await _userManager.ReplaceClaimAsync(user, existingClaim, attendeeClaim);
                     await _signInManager.RefreshSignInAsync(user);
                 }
             }
+
+            // D20: members get the complete gallery, not a cropped-down version of it.
+            return RedirectToAction("Index", "Photos", new { eventId = attendee.EventId });
+        }
+
+        // Accepts a full pasted URL or a bare token -- people paste what they were sent.
+        private static string? ExtractToken(string link)
+        {
+            var trimmed = link.Trim();
+            if (trimmed.Length == 0)
+            {
+                return null;
+            }
+
+            // Tokens are Guid.ToString("N"): 32 hex characters, no separators.
+            var candidate = trimmed.TrimEnd('/');
+            var lastSegment = candidate[(candidate.LastIndexOf('/') + 1)..];
+
+            // Strip any query string or fragment a mail client may have appended.
+            lastSegment = lastSegment.Split('?')[0].Split('#')[0];
+
+            return lastSegment.Length == 32 && lastSegment.All(Uri.IsHexDigit) ? lastSegment : null;
         }
     }
 }
