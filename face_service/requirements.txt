@@ -4,10 +4,14 @@ fastapi==0.115.6
 uvicorn[standard]==0.34.0
 insightface==1.0.1
 onnxruntime==1.20.1
-numpy==2.5.1
+# Pinned to 1.x deliberately. numpy 2.5.x is Python >=3.12 only, and this service targets
+# 3.11 (SETUP.md), so a 2.5 pin makes `pip install -r requirements.txt` fail outright.
+numpy==1.26.4
 python-multipart==0.0.20
 Pillow==11.1.0
-opencv-python==5.0.0.93
+# Headless, not the full build: this runs as a service with no GUI, and installing both
+# opencv-python and opencv-python-headless leaves two packages fighting over `cv2`.
+opencv-python-headless==4.10.0.84
 
 # Person detection. Optional: without it, person boxes are synthesised from face boxes
 # and the appearance crop shrinks to head-and-shoulders.

@@ -1,0 +1,152 @@
+@model AlgoForge.ViewModels.Account.AttendeeGateViewModel
+@{
+    // No layout on purpose. The shared shell carries staff navigation -- events, uploads,
+    // dashboards -- none of which an attendee has any use for, and all of which is the
+    // reason this page exists at all.
+    Layout = null;
+    ViewData["Title"] = "Your photos";
+}
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Your photos @(string.IsNullOrEmpty(Model.EventName) ? "" : "- " + Model.EventName)</title>
+    <link rel="icon" href="~/favicon.ico" />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link href="~/css/site.css" rel="stylesheet" />
+    <style>
+        /* The backdrop is decoration, not data -- flat colour blocks, no gradients, and
+           no real photograph on this page until the gate opens. A blurred <img> would
+           still be a photograph sitting in the page source, un-blurrable by anyone who
+           opens developer tools, and the people in those photographs have not yet agreed
+           to be seen by whoever is holding this link. */
+        .gate-wall {
+            position: fixed;
+            inset: 0;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+            grid-auto-rows: 150px;
+            gap: 14px;
+            padding: 14px;
+            filter: blur(18px);
+            transform: scale(1.06); /* hides the soft edges the blur leaves at the border */
+            overflow: hidden;
+        }
+
+        .gate-tile { border-radius: 14px; opacity: .85; }
+        .gate-tile:nth-child(3n)   { background: #0ea5e9; }
+        .gate-tile:nth-child(3n+1) { background: #374151; }
+        .gate-tile:nth-child(3n+2) { background: #14141c; }
+        .gate-tile:nth-child(4n)   { background: #6b7280; }
+
+        .gate-veil {
+            position: fixed;
+            inset: 0;
+            background: rgba(18,18,26,.55);
+        }
+
+        .gate-shell {
+            position: fixed;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .gate-card {
+            position: relative;
+            width: 100%;
+            max-width: 460px;
+            background: #fff;
+            border-radius: 20px;
+            box-shadow: 0 24px 60px rgba(15,15,25,.35);
+            overflow: hidden;
+        }
+
+        .gate-head {
+            background: #0ea5e9;
+            color: #fff;
+            padding: 22px 26px;
+        }
+
+        .gate-body { padding: 24px 26px 26px; }
+
+        @@media (prefers-reduced-motion: no-preference) {
+            .gate-card { animation: gate-rise .28s ease-out; }
+            @@keyframes gate-rise {
+                from { transform: translateY(10px); opacity: 0; }
+                to   { transform: translateY(0); opacity: 1; }
+            }
+        }
+    </style>
+</head>
+<body style="margin:0;background:#14141c;">
+
+    <div class="gate-wall" aria-hidden="true">
+        @for (var i = 0; i < 24; i++)
+        {
+            <div class="gate-tile"></div>
+        }
+    </div>
+    <div class="gate-veil" aria-hidden="true"></div>
+
+    @* Not a Bootstrap modal: those close on Escape and on a backdrop click, and this one
+       must not close at all. There is nothing behind it to go back to -- the page is the
+       gate. Rendered as plain markup so there is no dismiss path to disable. *@
+    <div class="gate-shell" role="dialog" aria-modal="true" aria-labelledby="gate-title">
+        <div class="gate-card">
+            <div class="gate-head">
+                <div style="font-weight:700;font-size:1.15rem;">Geeked On.</div>
+                <h1 id="gate-title" style="font-size:1.35rem;margin:.4rem 0 0;font-weight:700;">
+                    Your photos are ready
+                </h1>
+                @if (!string.IsNullOrEmpty(Model.EventName))
+                {
+                    <div style="opacity:.9;font-size:.9rem;margin-top:.2rem;">@Model.EventName</div>
+                }
+            </div>
+
+            <div class="gate-body">
+                <p class="text-muted" style="font-size:.92rem;">
+                    To see the album, enter the email your invite was sent to and the link you
+                    were given.
+                </p>
+
+                <form method="post" asp-action="Enter" asp-controller="Claim" novalidate>
+                    <div asp-validation-summary="ModelOnly" class="alert alert-danger py-2 px-3"
+                         style="font-size:.88rem;" role="alert"></div>
+
+                    <div class="mb-3">
+                        <label asp-for="Email" class="form-label fw-semibold" style="font-size:.9rem;"></label>
+                        <input asp-for="Email" class="form-control" autocomplete="email"
+                               inputmode="email" placeholder="you@example.com" autofocus />
+                        <span asp-validation-for="Email" class="text-danger" style="font-size:.83rem;"></span>
+                    </div>
+
+                    <div class="mb-3">
+                        <label asp-for="Link" class="form-label fw-semibold" style="font-size:.9rem;"></label>
+                        <input asp-for="Link" class="form-control" placeholder="Paste your invite link" />
+                        <span asp-validation-for="Link" class="text-danger" style="font-size:.83rem;"></span>
+                        <div class="form-text" style="font-size:.8rem;">
+                            Already filled in if you arrived from your link.
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn gk-btn-coral w-100">Open my album</button>
+                </form>
+
+                <p class="text-muted mt-3 mb-0" style="font-size:.8rem;">
+                    Organising an event or shooting one?
+                    <a asp-controller="Account" asp-action="Login" class="gk-link">Staff sign in</a>.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    @await Html.PartialAsync("_ValidationScriptsPartial")
+</body>
+</html>
