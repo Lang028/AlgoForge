@@ -12,6 +12,8 @@ on:
 
 env:
   IMAGE: ghcr.io/lang028/algoforge-face
+  # Lifted into env so the deploy steps can test for it -- `if:` cannot read `secrets`.
+  AZURE_CREDENTIALS: ${{ secrets.AZURE_CREDENTIALS }}
 
 jobs:
   build-and-deploy:
@@ -40,9 +42,17 @@ jobs:
             ${{ env.IMAGE }}:latest
             ${{ env.IMAGE }}:${{ github.sha }}
 
+      # See deploy-web.yml -- container deploys need management-API auth, which the
+      # publish profile does not provide. Skipped until AZURE_CREDENTIALS exists.
+      - name: Log in to Azure
+        if: env.AZURE_CREDENTIALS != ''
+        uses: azure/login@v2
+        with:
+          creds: ${{ env.AZURE_CREDENTIALS }}
+
       - name: Deploy to Azure Web App
+        if: env.AZURE_CREDENTIALS != ''
         uses: azure/webapps-deploy@v3
         with:
           app-name: algoforge-face-hg2026
-          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE_FACE }}
           images: ${{ env.IMAGE }}:${{ github.sha }}

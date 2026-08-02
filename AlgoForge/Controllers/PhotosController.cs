@@ -21,6 +21,7 @@ namespace AlgoForge.Controllers
         private readonly IWebHostEnvironment _env;
         private readonly ILogger<PhotosController> _logger;
         private readonly IEventAccessService _access;
+        private readonly IPhotoStorage _storage;
 
         public PhotosController(
             AlgoForgeDbContext db,
@@ -29,7 +30,8 @@ namespace AlgoForge.Controllers
             UserManager<ApplicationUser> userManager,
             IWebHostEnvironment env,
             ILogger<PhotosController> logger,
-            IEventAccessService access)
+            IEventAccessService access,
+            IPhotoStorage storage)
         {
             _db = db;
             _pipeline = pipeline;
@@ -38,6 +40,7 @@ namespace AlgoForge.Controllers
             _env = env;
             _logger = logger;
             _access = access;
+            _storage = storage;
         }
 
         [HttpGet]
@@ -156,15 +159,8 @@ namespace AlgoForge.Controllers
             // browser-side filter has finished with it.
             files ??= new List<IFormFile>();
 
-            // App_Data, not wwwroot: wwwroot is watched by dotnet watch / Visual Studio hot
-            // reload, so writing uploads there makes every upload look like a source change --
-            // the dev server re-evaluates the project and refreshes the browser mid-upload,
-            // which killed the batched uploader from the photographer's point of view.
-            // Program.cs maps this directory back onto the same /uploads URL.
-            var uploadsDir = Path.Combine(
-                _env.ContentRootPath, "App_Data", "uploads", eventId.ToString());
-            Directory.CreateDirectory(uploadsDir);
-
+            // Where the bytes land is IPhotoStorage's problem: App_Data in development,
+            // Azure Blob in production. See IPhotoStorage for why the two differ.
             var uploaded = 0;
             var skipped = new List<string>();
 
@@ -185,11 +181,12 @@ namespace AlgoForge.Controllers
 
                 var photoId = Guid.NewGuid();
                 var fileName = $"{photoId}{inspection.Extension}";
-                var filePath = Path.Combine(uploadsDir, fileName);
 
-                await using (var stream = new FileStream(filePath, FileMode.Create))
+                string blobUrl;
+                await using (var source = file.OpenReadStream())
                 {
-                    await file.CopyToAsync(stream, HttpContext.RequestAborted);
+                    blobUrl = await _storage.SaveAsync(
+                        eventId, fileName, source, HttpContext.RequestAborted);
                 }
 
                 var photo = new Photo
@@ -197,7 +194,7 @@ namespace AlgoForge.Controllers
                     Id = photoId,
                     EventId = eventId,
                     UploadedByUserId = userId,
-                    BlobUrl = $"/uploads/{eventId}/{fileName}",
+                    BlobUrl = blobUrl,
                     UploadedAt = DateTime.UtcNow
                 };
 
@@ -451,8 +448,8 @@ namespace AlgoForge.Controllers
                 return Forbid();
             }
 
-            var path = ResolveStoredPath(photo);
-            if (path is null)
+            var stream = await _storage.OpenReadAsync(photo, HttpContext.RequestAborted);
+            if (stream is null)
             {
                 return NotFound();
             }
@@ -460,7 +457,9 @@ namespace AlgoForge.Controllers
             // A private gallery shouldn't linger in a shared browser cache after access ends.
             Response.Headers.CacheControl = "no-store, no-cache, must-revalidate, private";
 
-            return PhysicalFile(path, ContentTypeFor(path));
+            // base.File, not this action: the bytes are streamed from wherever storage put
+            // them, which in production is a blob and has no path to hand to PhysicalFile.
+            return base.File(stream, ContentTypeFor(photo.BlobUrl));
         }
 
         // GET /Photos/Download/{id} -- same access check as File, but sent as an
@@ -470,16 +469,17 @@ namespace AlgoForge.Controllers
         [Route("Photos/Download/{id}")]
         public async Task<IActionResult> Download(Guid id)
         {
-            var (photo, path) = await AuthorisedPhotoFileAsync(id);
-            if (photo is null || path is null)
+            var (photo, stream) = await AuthorisedPhotoFileAsync(id);
+            if (photo is null || stream is null)
             {
-                return photo is null ? NotFound() : NotFound();
+                return NotFound();
             }
 
             Response.Headers.CacheControl = "no-store, no-cache, must-revalidate, private";
 
-            var fileName = $"{photo.UploadedAt:yyyy-MM-dd}-{photo.Id.ToString()[..8]}{Path.GetExtension(path)}";
-            return PhysicalFile(path, ContentTypeFor(path), fileName);
+            var extension = Path.GetExtension(photo.BlobUrl);
+            var fileName = $"{photo.UploadedAt:yyyy-MM-dd}-{photo.Id.ToString()[..8]}{extension}";
+            return base.File(stream, ContentTypeFor(photo.BlobUrl), fileName);
         }
 
         // POST /Photos/{id}/Delete -- a soft hide, not an erase (D8). The file stays on
@@ -519,8 +519,8 @@ namespace AlgoForge.Controllers
         }
 
         // Shared by File and Download: resolves the photo, checks the viewer belongs to its
-        // event, and returns the path on disk.
-        private async Task<(Photo? Photo, string? Path)> AuthorisedPhotoFileAsync(Guid id)
+        // event, and opens its bytes.
+        private async Task<(Photo? Photo, Stream? Content)> AuthorisedPhotoFileAsync(Guid id)
         {
             var photo = await _db.Photos.FirstOrDefaultAsync(p => p.Id == id);
             if (photo is null || photo.Status != PhotoStatus.Visible)
@@ -539,13 +539,13 @@ namespace AlgoForge.Controllers
                 EventRole.Coordinator, EventRole.Photographer, EventRole.Attendee, EventRole.Delegate
             }, HttpContext.RequestAborted);
 
-            return allowed ? (photo, ResolveStoredPath(photo)) : (null, null);
-        }
+            if (!allowed)
+            {
+                return (null, null);
+            }
 
-        // BlobUrl is "/uploads/{eventId}/{fileName}" -- map it back onto App_Data/uploads.
-        // Shared with PhotoDetectionWorker (background detection), which is why this is a
-        // thin wrapper over PhotoStorage rather than its own copy of the guard.
-        private string? ResolveStoredPath(Photo photo) => PhotoStorage.ResolveStoredPath(_env, photo);
+            return (photo, await _storage.OpenReadAsync(photo, HttpContext.RequestAborted));
+        }
 
         private static string ContentTypeFor(string path) =>
             Path.GetExtension(path).ToLowerInvariant() switch
