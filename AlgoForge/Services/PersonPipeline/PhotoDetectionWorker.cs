@@ -66,8 +66,10 @@ namespace AlgoForge.Services.PersonPipeline
                 return;
             }
 
-            var path = PhotoStorage.ResolveStoredPath(env, photo);
-            if (path is null)
+            var storage = services.GetRequiredService<IPhotoStorage>();
+
+            await using var content = await storage.OpenReadAsync(photo, stoppingToken);
+            if (content is null)
             {
                 // The row survived but the file did not -- nothing to re-read. Marked Failed
                 // rather than left Pending, so a status poll doesn't wait on it forever.
@@ -76,7 +78,7 @@ namespace AlgoForge.Services.PersonPipeline
                 return;
             }
 
-            await pipeline.ProcessPhotoAsync(photo, path);
+            await pipeline.ProcessPhotoAsync(photo, content, Path.GetFileName(photo.BlobUrl));
             await db.SaveChangesAsync(stoppingToken);
 
             var stillPending = await db.Photos.CountAsync(

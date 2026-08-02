@@ -37,11 +37,13 @@ namespace AlgoForge.Services.PersonPipeline
 
         // Detects people in one photo and stores a PersonDetection per person. Does not
         // cluster: clustering is per-event and runs once per batch, not once per photo.
-        public async Task<bool> ProcessPhotoAsync(Photo photo, string absoluteFilePath)
+        // Takes the bytes rather than a path: in production the photo lives in blob storage
+        // and there is no file on this machine to point at. See IPhotoStorage.
+        public async Task<bool> ProcessPhotoAsync(Photo photo, Stream content, string fileName)
         {
             try
             {
-                var result = await CallDetectAsync(photo, absoluteFilePath);
+                var result = await CallDetectAsync(photo, content, fileName);
                 if (result is null)
                 {
                     photo.FaceProcessingStatus = PhotoFaceProcessingStatus.Failed;
@@ -98,14 +100,14 @@ namespace AlgoForge.Services.PersonPipeline
             }
         }
 
-        private async Task<DetectResponseDto?> CallDetectAsync(Photo photo, string absoluteFilePath)
+        private async Task<DetectResponseDto?> CallDetectAsync(
+            Photo photo, Stream source, string fileName)
         {
             using var content = new MultipartFormDataContent();
 
-            var bytes = await File.ReadAllBytesAsync(absoluteFilePath);
-            var fileContent = new ByteArrayContent(bytes);
+            var fileContent = new StreamContent(source);
             fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("image/jpeg");
-            content.Add(fileContent, "file", Path.GetFileName(absoluteFilePath));
+            content.Add(fileContent, "file", fileName);
 
             // The event id scopes the embedding sidecar store, so the worker can purge a
             // whole event's vectors as one directory when it is archived (D7).

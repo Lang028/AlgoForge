@@ -30,6 +30,20 @@ builder.Services.AddControllersWithViews();
 
 builder.Services.AddScoped<AttendeeImportService>();
 
+// Photo bytes: local disk in development, Azure Blob in production. The container
+// filesystem an App Service gives us is wiped on every restart and redeploy, so anything
+// written there outlives its Photo row by exactly as long as the container does.
+if (builder.Environment.IsDevelopment())
+{
+    builder.Services.AddScoped<AlgoForge.Services.IPhotoStorage,
+        AlgoForge.Services.LocalPhotoStorage>();
+}
+else
+{
+    builder.Services.AddScoped<AlgoForge.Services.IPhotoStorage,
+        AlgoForge.Services.BlobPhotoStorage>();
+}
+
 builder.Services.AddScoped<
     AlgoForge.Services.Authorization.IEventAccessService,
     AlgoForge.Services.Authorization.EventAccessService>();
