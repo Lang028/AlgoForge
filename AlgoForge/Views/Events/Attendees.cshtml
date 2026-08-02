@@ -67,9 +67,8 @@ else
                                 <form method="post" asp-action="SendInvite" asp-route-eventId="@eventId" asp-route-attendeeId="@attendee.Id">
                                     <button type="submit" class="btn gk-btn-coral gk-btn-sm">Send invite</button>
                                 </form>
-                                @* The same link the invite email carries. Surfaced here so it can be opened
-                                   without going via the outbox -- useful when demonstrating the attendee
-                                   side, and when someone says the email never arrived. *@
+                                @* The same link the invite email carries. Surfaced here so a coordinator
+                                   can hand it over directly when someone says the email never arrived. *@
                                 <button type="button" class="btn gk-btn-soft gk-btn-sm gk-copy-claim"
                                         data-claim-link="@Url.Action("Claim", "Claim", new { token = attendee.InviteToken }, Context.Request.Scheme)"
                                         title="Copy this attendee's invite link">

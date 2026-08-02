@@ -3,8 +3,6 @@
 **Single source of truth for the Geeked On build.** Any human or AI joining this project reads this document first. If a decision is recorded here as LOCKED, do not re-litigate it — build to it. If something is marked OPEN, it has not been decided; resolve it with Lange before writing code that depends on it.
 
 - Project: Geeked On — organisation-managed event photography and attendee reconnection platform
-- Team: AlgoForge, Group 12 — Application Development, Durban University of Technology
-- Deadline anchor: Demo Day (all sprint planning works backwards from this date — **date TBD, fill in**)
 - Owner: Langelihle (Lange) Gumede
 
 ---

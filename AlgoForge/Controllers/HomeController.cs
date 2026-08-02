@@ -11,11 +11,16 @@ namespace AlgoForge.Controllers
     {
         private readonly AlgoForgeDbContext _db;
         private readonly UserManager<ApplicationUser> _userManager;
+        private readonly IConfiguration _configuration;
 
-        public HomeController(AlgoForgeDbContext db, UserManager<ApplicationUser> userManager)
+        public HomeController(
+            AlgoForgeDbContext db,
+            UserManager<ApplicationUser> userManager,
+            IConfiguration configuration)
         {
             _db = db;
             _userManager = userManager;
+            _configuration = configuration;
         }
 
         // Anonymous visitors get the public landing page; signed-in users get the
@@ -164,6 +169,9 @@ namespace AlgoForge.Controllers
 
         public IActionResult Contact()
         {
+            // Left unset until there is an inbox somebody actually reads. The view falls
+            // back to "coming soon" rather than printing an address that bounces.
+            ViewBag.SupportEmail = _configuration["Support:Email"];
             return View();
         }
 
