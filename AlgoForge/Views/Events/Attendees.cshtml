@@ -23,6 +23,13 @@
     <div class="alert alert-success mt-3">@success</div>
 }
 
+@* This page had no error branch, so a failed invite would have shown nothing at all --
+   the one outcome the coordinator most needs to see. *@
+@if (TempData["ErrorMessage"] is string error)
+{
+    <div class="alert alert-danger mt-3">@error</div>
+}
+
 @if (!Model.Any())
 {
     <div class="gk-panel text-center text-muted mt-3 py-5">

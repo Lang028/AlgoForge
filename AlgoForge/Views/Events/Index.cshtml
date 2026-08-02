@@ -117,8 +117,10 @@
         padding: .28rem .7rem;
     }
 
+    /* Draft was the same sky blue as Live, so the one thing the pill exists to tell you
+       apart -- whether attendees can see this event yet -- was invisible at a glance. */
     .status-pill.live { background: #0ea5e9; }
-    .status-pill.draft { background: #0ea5e9; }
+    .status-pill.draft { background: #f59e0b; }
     .status-pill.post { background: #14141c; }
     .status-pill.archived { background: #9ca3af; }
 
@@ -218,7 +220,7 @@ else
                     <div class="event-body">
                         <div class="event-meta">
                             <span class="status-pill @PillClass(evt.Status)">@evt.Status</span>
-                            <small>@evt.EventDate.ToString("yyyy-MM-dd")</small>
+                            <small>@evt.EventDate.ToString("dd MMM yyyy")</small>
                         </div>
                         <h5>@evt.Name</h5>
                         <div class="event-org">

@@ -20,7 +20,7 @@ namespace AlgoForge.Services
             _logger = logger;
         }
 
-        public Task SendEmailAsync(string toEmail, string subject, string body)
+        public Task<bool> SendEmailAsync(string toEmail, string subject, string body)
         {
             Directory.CreateDirectory(_outboxRoot);
 
@@ -30,7 +30,7 @@ namespace AlgoForge.Services
             File.WriteAllText(Path.Combine(_outboxRoot, fileName), Render(toEmail, subject, body));
             _logger.LogInformation("Outbox email written. To: {Email}, Subject: {Subject}", toEmail, subject);
 
-            return Task.CompletedTask;
+            return Task.FromResult(true);
         }
 
         // The body is plain text written by the callers, so it is encoded rather than

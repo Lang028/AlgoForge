@@ -405,11 +405,25 @@ namespace AlgoForge.Controllers
             }
 
             var claimUrl = Url.Action(nameof(ClaimController.Claim), "Claim", new { token = attendee.InviteToken }, Request.Scheme)!;
-            await _emailSender.SendEmailAsync(attendee.Email, "You're tagged in photos from the event",
+
+            var sent = await _emailSender.SendEmailAsync(
+                attendee.Email,
+                "You're tagged in photos from the event",
                 $"Claim your photos and review your tags: {claimUrl}");
 
-            TempData["SuccessMessage"] =
-     $"Invite emailed to {attendee.Name}. The claim link is {claimUrl}";
+            // The link is shown either way, so a mail outage costs the coordinator a copy
+            // and paste rather than the ability to invite anyone at all. What changes is
+            // that they are told which of the two just happened.
+            if (sent)
+            {
+                TempData["SuccessMessage"] =
+                    $"Invite emailed to {attendee.Name}. The claim link is {claimUrl}";
+            }
+            else
+            {
+                TempData["ErrorMessage"] =
+                    $"Could not email {attendee.Name} — send them this claim link directly: {claimUrl}";
+            }
 
             return RedirectToAction(nameof(Attendees), new { eventId });
         }

@@ -12,10 +12,10 @@ namespace AlgoForge.Services
             _logger = logger;
         }
 
-        public Task SendEmailAsync(string toEmail, string subject, string body)
+        public Task<bool> SendEmailAsync(string toEmail, string subject, string body)
         {
             _logger.LogInformation("Email suppressed (dev mode). To: {Email}, Subject: {Subject}, Body: {Body}", toEmail, subject, body);
-            return Task.CompletedTask;
+            return Task.FromResult(true);
         }
     }
 }

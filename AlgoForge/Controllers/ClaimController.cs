@@ -52,11 +52,30 @@ namespace AlgoForge.Controllers
                 return View("InviteInvalid");
             }
 
-            // Already signed in: nothing to ask. Finish the claim and go straight through.
+            // Already signed in, and the invite was addressed to them: nothing to ask.
+            //
+            // The email has to match. Without that check this path was strictly weaker than
+            // the anonymous one below, which has always required the token *and* the address
+            // it was sent to: anyone signed into any account who came by an unclaimed token
+            // -- a forwarded link, a database read -- became that attendee, inheriting their
+            // photos, their tags and their connection requests. Someone signed in as
+            // somebody else falls through to the gate and has to prove the address instead,
+            // which is the same bar an anonymous visitor already had to clear.
             var userIdText = _userManager.GetUserId(User);
             if (userIdText is not null && Guid.TryParse(userIdText, out var signedInUserId))
             {
-                return await CompleteAsync(attendee, signedInUserId);
+                var signedInEmail = await _userManager.GetEmailAsync(
+                    (await _userManager.FindByIdAsync(signedInUserId.ToString()))!);
+
+                var addressedToThem = string.Equals(
+                    signedInEmail, attendee.Email, StringComparison.OrdinalIgnoreCase);
+
+                // Re-visiting a link they already claimed stays a repair path, so attendees
+                // who claimed before this check existed are not locked out of their own record.
+                if (addressedToThem || attendee.ClaimedByUserId == signedInUserId)
+                {
+                    return await CompleteAsync(attendee, signedInUserId);
+                }
             }
 
             // Anonymous: render the album behind the gate. The token travels in the form so

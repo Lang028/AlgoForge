@@ -83,8 +83,10 @@
 
     .a-card small { color: rgba(255, 255, 255, .55); }
 
+    /* Two accent classes that resolved to the same colour, which is the same as having
+       neither -- the cards they distinguish looked identical. */
     .a-card .accent-coral { color: #0ea5e9; }
-    .a-card .accent-violet { color: #0ea5e9; }
+    .a-card .accent-violet { color: #8b5cf6; }
 
     .a-panel {
         background: #1d1d28;
@@ -127,7 +129,7 @@
     }
 
     .status-pill.live { background: #0ea5e9; }
-    .status-pill.draft { background: #0ea5e9; }
+    .status-pill.draft { background: #f59e0b; }
     .status-pill.post { background: #3a3a4a; }
     .status-pill.archived { background: #6b7280; }
 
@@ -197,7 +199,7 @@
                     <div class="tag-strip mb-3">
                         <span><span class="legend-dot" style="background:#e5e7eb"></span>Suggested @Model.SuggestedTags</span>
                         <span><span class="legend-dot" style="background:#0ea5e9"></span>Confirmed @Model.ConfirmedTags</span>
-                        <span><span class="legend-dot" style="background:#0ea5e9"></span>Rejected @Model.RejectedTags</span>
+                        <span><span class="legend-dot" style="background:#64748b"></span>Rejected @Model.RejectedTags</span>
                     </div>
                 </div>
                 <div class="row g-2">
@@ -261,7 +263,9 @@
     <script>
         const dayLabels = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(dayLabels));
         const dayCounts = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(dayCounts));
-        const barColors = dayCounts.map((_, i) => i === dayCounts.length - 1 ? '#0ea5e9' : '#0ea5e9');
+        // Both arms of this were the same colour, so the ternary picking out today did
+        // nothing at all. Today stays sky; the preceding days recede.
+        const barColors = dayCounts.map((_, i) => i === dayCounts.length - 1 ? '#0ea5e9' : '#3f4457');
 
         new Chart(document.getElementById('adminUploadsChart'), {
             type: 'bar',
