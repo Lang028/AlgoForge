@@ -2,6 +2,8 @@ using AlgoForge.Data;
 using AlgoForge.Models;
 using AlgoForge.Services;
 using AlgoForge.Services.PersonPipeline;
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
@@ -28,6 +30,24 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole<Guid>>()
 builder.Services.AddAuthorization();
 builder.Services.AddControllersWithViews();
 
+// App Service terminates TLS at its front end and forwards plain HTTP to the container,
+// so without this the app believes every request arrived over http on an internal host.
+// That is not cosmetic: absolute URLs built from Request.Scheme -- the confirmation and
+// password-reset links that go out by email -- would be generated as http:// pointing at
+// the wrong host, and UseHttpsRedirection cannot work out what to redirect to.
+//
+// The proxy sits inside the App Service infrastructure and its address is not known ahead
+// of time, so the default known-network restrictions have to be cleared. That is only
+// safe because nothing reaches the container except through that front end.
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders =
+        ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+});
+
 builder.Services.AddScoped<AttendeeImportService>();
 
 // Photo bytes: local disk in development, Azure Blob in production. The container
@@ -42,6 +62,26 @@ else
 {
     builder.Services.AddScoped<AlgoForge.Services.IPhotoStorage,
         AlgoForge.Services.BlobPhotoStorage>();
+
+    // Data Protection keys encrypt the auth cookie, antiforgery tokens and the tokens in
+    // password-reset and email-confirmation links. By default they are written to a
+    // directory inside the container, which is destroyed on every restart, redeploy and
+    // scale event -- so a deploy silently signs out every user, invalidates every
+    // outstanding confirmation link, and breaks any form a user already had open.
+    //
+    // Persisting them to blob storage makes the keyring outlive the container, and lets
+    // more than one instance share it if this ever scales past a single worker.
+    var storageConnection = builder.Configuration["Storage:ConnectionString"]
+        ?? throw new InvalidOperationException(
+            "Storage:ConnectionString is missing. Production cannot start without it.");
+
+    builder.Services
+        .AddDataProtection()
+        .SetApplicationName("AlgoForge")
+        .PersistKeysToAzureBlobStorage(
+            storageConnection,
+            "dataprotection",
+            "keys.xml");
 }
 
 builder.Services.AddScoped<
@@ -157,6 +197,10 @@ else
         await db.Database.MigrateAsync();
     }
 }
+
+// Must run before anything that reads the scheme or the client address -- which includes
+// the exception handler, HSTS and the redirect below.
+app.UseForwardedHeaders();
 
 if (!app.Environment.IsDevelopment())
 {
