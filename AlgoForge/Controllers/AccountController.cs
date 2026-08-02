@@ -140,10 +140,20 @@ namespace AlgoForge.Controllers
                 return View(model);
             }
 
-            var result = await _signInManager.PasswordSignInAsync(user, model.Password, model.RememberMe, lockoutOnFailure: false);
+            var result = await _signInManager.PasswordSignInAsync(user, model.Password, model.RememberMe, lockoutOnFailure: true);
             if (!result.Succeeded)
             {
-                ModelState.AddModelError(string.Empty, "Invalid login attempt.");
+                // Being locked out is worth saying plainly: someone typing their own
+                // correct password and still being refused has no way to work out why,
+                // and would just keep trying. It does confirm the address is registered,
+                // which the generic message below deliberately avoids -- an acceptable
+                // trade here, where the alternative is stranding a real user.
+                ModelState.AddModelError(
+                    string.Empty,
+                    result.IsLockedOut
+                        ? "This account is temporarily locked after too many failed sign-in attempts. Try again in 15 minutes."
+                        : "Invalid login attempt.");
+
                 return View(model);
             }
 

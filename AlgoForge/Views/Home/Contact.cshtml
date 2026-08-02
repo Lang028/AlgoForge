@@ -7,10 +7,25 @@
     <div class="crumb">Geeked On <span class="sep">&rsaquo;</span> Contact</div>
 </div>
 
+@*
+    The address below is a placeholder. Replace SupportEmail in appsettings with a real
+    monitored inbox before this is shown to anyone outside the team -- a contact page that
+    goes nowhere is worse than no contact page.
+*@
 <div class="gk-panel mt-3" style="max-width: 520px;">
+    <p>
+        Questions about an event you were photographed at, or want to run your own?
+        Get in touch and we'll come back to you.
+    </p>
     <address class="mb-0">
-        <strong>AlgoForge &mdash; Group 12</strong><br />
-        <span class="text-muted">Application Development</span><br />
-        Durban University of Technology
+        <strong>Geeked On</strong><br />
+        @if (!string.IsNullOrWhiteSpace(ViewBag.SupportEmail as string))
+        {
+            <a href="mailto:@ViewBag.SupportEmail">@ViewBag.SupportEmail</a>
+        }
+        else
+        {
+            <span class="text-muted">Contact details coming soon.</span>
+        }
     </address>
 </div>

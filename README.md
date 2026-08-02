@@ -2,7 +2,7 @@
 
 **Organisation-managed event photography and attendee reconnection platform.**
 
-Geeked On lets organisations run photo galleries for their events, automatically groups the faces in those photos, and — with each person's explicit consent — tags attendees so they can find their photos and reconnect with the people they met. Built as a Demo Day project by AlgoForge (Group 12), Durban University of Technology.
+Geeked On lets organisations run photo galleries for their events, automatically groups the faces in those photos, and — with each person's explicit consent — tags attendees so they can find their photos and reconnect with the people they met.
 
 > The core idea: event photos are full of people you meant to follow up with and never did. Geeked On turns a photo gallery into a consent-based networking layer.
 
@@ -218,10 +218,6 @@ Scoped out of the current build, deliberately:
 - Delegate-specific privacy controls
 - Face blur on tag rejection (rejection currently removes the association only)
 - Multi-day events for appearance matching (people change clothes overnight; v1 assumes one-day events where outfit + hair are stable — chasing the perfect system first would be the downfall)
-
-## Team
-
-Built by **AlgoForge — Group 12**, Application Development, Durban University of Technology.
 
 ## Licence
 

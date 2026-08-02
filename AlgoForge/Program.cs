@@ -23,7 +23,16 @@ builder.Services.AddDbContext<AlgoForgeDbContext>(options =>
         sql => sql.EnableRetryOnFailure()));
 
 // ASP.NET Core Identity
-builder.Services.AddIdentity<ApplicationUser, IdentityRole<Guid>>()
+builder.Services.AddIdentity<ApplicationUser, IdentityRole<Guid>>(options =>
+    {
+        // Without this, both sign-in paths counted no failures at all and an attacker
+        // could try passwords against any account, the platform admin included, as fast
+        // as requests could be sent. Five tries then a fifteen minute wait costs a real
+        // user who mistyped almost nothing and makes online guessing useless.
+        options.Lockout.AllowedForNewUsers = true;
+        options.Lockout.MaxFailedAccessAttempts = 5;
+        options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
+    })
     .AddEntityFrameworkStores<AlgoForgeDbContext>()
     .AddDefaultTokenProviders();
 
@@ -160,7 +169,8 @@ if (app.Environment.IsDevelopment())
             await DbInitializer.SeedAsync(
                 db,
                 userManager,
-                roleManager);
+                roleManager,
+                builder.Configuration["Seed:AdminPassword"]);
         }
         else
         {
@@ -180,7 +190,8 @@ if (app.Environment.IsDevelopment())
         await DbInitializer.SeedAsync(
             db,
             userManager,
-            roleManager);
+            roleManager,
+            builder.Configuration["Seed:AdminPassword"]);
     }
 }
 else
