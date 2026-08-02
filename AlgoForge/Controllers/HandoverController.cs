@@ -108,14 +108,22 @@ namespace AlgoForge.Controllers
             var acceptUrl = Url.Action(nameof(Accept), "Handover",
                 new { token = invite.Token }, Request.Scheme)!;
 
-            await _emailSender.SendEmailAsync(invite.Email,
+            var sent = await _emailSender.SendEmailAsync(invite.Email,
                 $"You've been asked to manage {evt.Name}",
                 $"You have been invited to take on the event \"{evt.Name}\" on Geeked On.\n\n" +
                 $"Accepting lets you set your organisation up and take over managing the event " +
                 $"-- its attendees, tagging and settings.\n\nOpen this link to accept: {acceptUrl}");
 
-            TempData["SuccessMessage"] =
-    $"Invite emailed to {invite.Email}. The link is {acceptUrl}";
+            if (sent)
+            {
+                TempData["SuccessMessage"] =
+                    $"Invite emailed to {invite.Email}. The link is {acceptUrl}";
+            }
+            else
+            {
+                TempData["ErrorMessage"] =
+                    $"Could not email {invite.Email} — send them this link directly: {acceptUrl}";
+            }
 
             return RedirectToAction(nameof(Index), new { eventId });
         }

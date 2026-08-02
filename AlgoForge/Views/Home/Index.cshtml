@@ -584,7 +584,7 @@
                 <div class="mt-3" style="font-size:.8rem;">
                     <div class="mb-1"><span class="legend-dot" style="background:#e5e7eb"></span>Suggested (@Model.SuggestedTags)</div>
                     <div class="mb-1"><span class="legend-dot" style="background:#0ea5e9"></span>Confirmed (@Model.ConfirmedTags)</div>
-                    <div><span class="legend-dot" style="background:#0ea5e9"></span>Rejected (@Model.RejectedTags)</div>
+                    <div><span class="legend-dot" style="background:#64748b"></span>Rejected (@Model.RejectedTags)</div>
                 </div>
             </div>
         </div>
@@ -626,7 +626,11 @@
                 labels: @(Model.TotalTags == 0 ? Html.Raw("['No tags yet']") : Html.Raw("['Suggested', 'Confirmed', 'Rejected']")),
                 datasets: [{
                     data: @(Model.TotalTags == 0 ? Html.Raw("[1]") : Html.Raw($"[{Model.SuggestedTags}, {Model.ConfirmedTags}, {Model.RejectedTags}]")),
-                    backgroundColor: @(Model.TotalTags == 0 ? Html.Raw("['#eceef1']") : Html.Raw("['#e5e7eb', '#0ea5e9', '#0ea5e9']")),
+                    // Rejected was the same sky blue as Confirmed, making the two opposite
+                    // outcomes one indistinguishable arc. Slate rather than red: rejecting a
+                    // tag is somebody exercising the choice this product is built around, not
+                    // an error state to be flagged.
+                    backgroundColor: @(Model.TotalTags == 0 ? Html.Raw("['#eceef1']") : Html.Raw("['#e5e7eb', '#0ea5e9', '#64748b']")),
                     borderWidth: 0,
                     cutout: '72%'
                 }]

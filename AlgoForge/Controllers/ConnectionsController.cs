@@ -146,14 +146,17 @@ namespace AlgoForge.Controllers
             var respondUrl = Url.Action(nameof(Respond), "Connections",
                 new { token = connection.ResponseToken }, Request.Scheme)!;
 
-            await _emailSender.SendEmailAsync(attendee.Email,
+            var sent = await _emailSender.SendEmailAsync(attendee.Email,
                 $"{requesterName} wants to connect",
                 $"You were both at {(await _db.Events.FindAsync(eventId))?.Name}. " +
                 $"Accept or decline here: {respondUrl}");
 
-            TempData["SuccessMessage"] =
-                $"Request sent to {attendee.Name}. They'll see your details once they accept. " +
-                $"In demo mode the email lands in the Outbox; the respond link is {respondUrl}";
+            // The respond link is deliberately not shown to the requester: only the person
+            // it was addressed to may act on it, and dangling it in front of the one party
+            // who must not use it invites exactly that attempt.
+            TempData[sent ? "SuccessMessage" : "ErrorMessage"] = sent
+                ? $"Request sent to {attendee.Name}. They'll see your details once they accept."
+                : $"Your request to {attendee.Name} was saved, but we couldn't email them. They'll see it next time they sign in.";
 
             return BackToGallery(eventId);
         }

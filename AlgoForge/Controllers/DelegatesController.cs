@@ -120,15 +120,23 @@ namespace AlgoForge.Controllers
 
             var eventName = (await _db.Events.FindAsync(eventId))?.Name ?? "an event";
 
-            await _emailSender.SendEmailAsync(invite.Email,
+            var sent = await _emailSender.SendEmailAsync(invite.Email,
                 $"{attendee.Name} shared their event photos with you",
                 $"{attendee.Name} has asked that you be able to view the photographs from {eventName} " +
                 $"on their behalf.\n\nOpen this link to get access: {claimUrl}\n\n" +
                 $"You will be able to view and download the gallery. You cannot tag people or " +
                 $"answer connection requests -- those stay with {attendee.Name}.");
 
-            TempData["SuccessMessage"] =
-    $"Invite emailed to {invite.Name}. The link is {claimUrl}";
+            if (sent)
+            {
+                TempData["SuccessMessage"] =
+                    $"Invite emailed to {invite.Name}. The link is {claimUrl}";
+            }
+            else
+            {
+                TempData["ErrorMessage"] =
+                    $"Could not email {invite.Name} — send them this link directly: {claimUrl}";
+            }
 
             return RedirectToAction(nameof(Index), new { eventId });
         }

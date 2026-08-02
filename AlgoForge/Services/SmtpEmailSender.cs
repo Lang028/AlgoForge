@@ -17,43 +17,71 @@ namespace AlgoForge.Services
             _logger = logger;
         }
 
-        public async Task SendEmailAsync(
+        // Never throws. Everything below -- missing configuration, a refused connection,
+        // rejected credentials, a provider rate-limiting us -- is logged and reported as
+        // false. An invite that could not be emailed is a thing the coordinator needs to
+        // be told about and work around, not an error page in the middle of running an
+        // event, and certainly not a "sent" message that never left the building.
+        public async Task<bool> SendEmailAsync(
             string toEmail,
             string subject,
             string body)
         {
-            // TEST MESSAGE:
-            // This lets us confirm that the application is actually reaching
-            // SmtpEmailSender when an invite is sent.
-            _logger.LogInformation(
-                "SMTP EMAIL SENDER CALLED for {Email}",
-                toEmail);
+            var host = _configuration["Smtp:Host"];
+            var portText = _configuration["Smtp:Port"];
+            var username = _configuration["Smtp:Username"];
+            var password = _configuration["Smtp:Password"];
+            var from = _configuration["Smtp:From"] ?? username;
 
-            var host = _configuration["Smtp:Host"]
-                ?? throw new InvalidOperationException(
-                    "Smtp:Host is missing.");
+            var missing = new[]
+            {
+                host is null ? "Smtp:Host" : null,
+                portText is null ? "Smtp:Port" : null,
+                username is null ? "Smtp:Username" : null,
+                password is null ? "Smtp:Password" : null
+            }.Where(k => k is not null).ToArray();
 
-            var portText = _configuration["Smtp:Port"]
-                ?? throw new InvalidOperationException(
-                    "Smtp:Port is missing.");
+            if (missing.Length > 0)
+            {
+                _logger.LogError(
+                    "Cannot send mail to {Email}: missing configuration {Keys}.",
+                    toEmail, string.Join(", ", missing));
 
-            var username = _configuration["Smtp:Username"]
-                ?? throw new InvalidOperationException(
-                    "Smtp:Username is missing.");
-
-            var password = _configuration["Smtp:Password"]
-                ?? throw new InvalidOperationException(
-                    "Smtp:Password is missing.");
-
-            var from = _configuration["Smtp:From"]
-                ?? username;
+                return false;
+            }
 
             if (!int.TryParse(portText, out var port))
             {
-                throw new InvalidOperationException(
-                    "Smtp:Port must be a valid number.");
+                _logger.LogError(
+                    "Cannot send mail to {Email}: Smtp:Port '{Port}' is not a number.",
+                    toEmail, portText);
+
+                return false;
             }
 
+            try
+            {
+                return await SendCoreAsync(toEmail, subject, body, host!, port, username!, password!, from!);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex, "Failed to send mail to {Email} via {Host}:{Port}.", toEmail, host, port);
+
+                return false;
+            }
+        }
+
+        private async Task<bool> SendCoreAsync(
+            string toEmail,
+            string subject,
+            string body,
+            string host,
+            int port,
+            string username,
+            string password,
+            string from)
+        {
             var message = new MimeMessage();
 
             message.From.Add(
@@ -71,35 +99,25 @@ namespace AlgoForge.Services
 
             using var client = new SmtpClient();
 
-            _logger.LogInformation(
-                "Connecting to SMTP server {Host}:{Port}",
-                host,
-                port);
-
             await client.ConnectAsync(
                 host,
                 port,
                 SecureSocketOptions.StartTls);
 
-            _logger.LogInformation(
-                "SMTP connection successful. Authenticating as {Username}",
-                username);
-
             await client.AuthenticateAsync(
                 username,
                 password);
-
-            _logger.LogInformation(
-                "SMTP authentication successful. Sending email to {Email}",
-                toEmail);
 
             await client.SendAsync(message);
 
             await client.DisconnectAsync(true);
 
             _logger.LogInformation(
-                "Email sent successfully to {Email}",
-                toEmail);
+                "Email sent to {Email}: {Subject}",
+                toEmail,
+                subject);
+
+            return true;
         }
     }
 }

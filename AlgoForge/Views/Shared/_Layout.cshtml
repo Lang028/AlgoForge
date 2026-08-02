@@ -4,32 +4,38 @@
 @inject AlgoForgeDbContext Db
 @inject UserManager<AlgoForge.Models.ApplicationUser> UserManager
 @{
-    var currentUserRoles = new List<string>();
-
     // The platform admin monitors the system and never participates in events, so the
     // event-side navigation is not offered to them at all.
     var isSystemAdmin = User.IsInRole(AlgoForge.Data.DbInitializer.SystemAdminRole);
 
     // Connecting is an attendee concern -- see ConnectionsController.Index.
+    //
+    // This used to load every membership with its event joined in, on every page, to
+    // build a badge listing "Role @ Event" for each one. That was a join returning a row
+    // per membership on each request, and it printed the names of every event a person
+    // belongs to next to their address in the navigation -- on a projector or a shared
+    // screen that is other people's information, not just theirs. The badge is gone and
+    // what is left is one existence check.
+    //
+    // Not read from the ActiveRole claim: that holds the single role chosen at sign-in, so
+    // a photographer who is also an attendee elsewhere would lose the Connections link
+    // entirely, and a claim only refreshes when it is rewritten.
     var isAttendee = false;
+    var displayName = string.Empty;
 
     if (User.Identity?.IsAuthenticated ?? false)
     {
         var currentUserId = UserManager.GetUserId(User);
         if (currentUserId is not null && Guid.TryParse(currentUserId, out var currentUserGuid))
         {
-            var memberships = await Db.EventMemberships
-                .Where(m => m.UserId == currentUserGuid)
-                .Include(m => m.Event)
-                .Select(m => new { m.Role, EventName = m.Event!.Name })
-                .ToListAsync();
-
-            currentUserRoles = memberships
-                .Select(m => $"{m.Role} @ {m.EventName}")
-                .ToList();
-
-            isAttendee = memberships.Any(m => m.Role == AlgoForge.Models.EventRole.Attendee);
+            isAttendee = await Db.EventMemberships.AnyAsync(
+                m => m.UserId == currentUserGuid && m.Role == AlgoForge.Models.EventRole.Attendee);
         }
+
+        var currentUser = await UserManager.GetUserAsync(User);
+        displayName = string.IsNullOrWhiteSpace(currentUser?.DisplayName)
+            ? (User.Identity.Name ?? string.Empty)
+            : currentUser!.DisplayName;
     }
 }
 <!DOCTYPE html>
@@ -75,11 +81,7 @@
                     <ul class="navbar-nav align-items-sm-center">
                         <li class="nav-item">
                             <span class="nav-link user-chip">
-                                @User.Identity.Name
-                                @if (currentUserRoles.Any())
-                                {
-                                    <span class="badge rounded-pill">@string.Join(", ", currentUserRoles)</span>
-                                }
+                                @displayName
                             </span>
                         </li>
                         <li class="nav-item">
