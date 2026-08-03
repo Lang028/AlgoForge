@@ -6,6 +6,12 @@ namespace AlgoForge.Models
     {
         Pending,
         Processed,
-        Failed
+        Failed,
+
+        // Uploaded to a link-shared gallery, where detection never runs. A distinct value
+        // rather than reusing Processed, which would claim a pass happened, or leaving it
+        // Pending, which the worker's startup sweep would pick up and run -- quietly doing
+        // the one thing that mode exists to not do.
+        NotApplicable
     }
 }

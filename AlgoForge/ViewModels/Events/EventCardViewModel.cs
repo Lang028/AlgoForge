@@ -21,6 +21,14 @@ namespace AlgoForge.ViewModels.Events
         public int PhotoCount { get; set; }
         public int AttendeeCount { get; set; }
 
+        public EventGalleryMode GalleryMode { get; set; }
+
+        /// <summary>Set on link-shared events only; null on consent events, which have no link.</summary>
+        public string? ShareToken { get; set; }
+
+        /// <summary>The absolute /g/{token} link, built in the controller once the request is known.</summary>
+        public string? ShareUrl { get; set; }
+
         /// <summary>The viewer's own role(s) in this event -- drives which action buttons the card offers.</summary>
         public List<EventRole> ViewerRoles { get; set; } = new();
 

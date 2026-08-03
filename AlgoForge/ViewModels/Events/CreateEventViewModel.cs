@@ -20,5 +20,11 @@ namespace AlgoForge.ViewModels.Events
 
         [Display(Name = "Attendees must confirm suggested tags")]
         public bool TagConfirmationRequired { get; set; } = true;
+
+        // Asked here and nowhere else: Event.GalleryMode cannot be changed once the event
+        // exists, so this is the only moment it is ever offered.
+        [Display(Name = "How should people see these photos?")]
+        public AlgoForge.Models.EventGalleryMode GalleryMode { get; set; }
+            = AlgoForge.Models.EventGalleryMode.Consent;
     }
 }

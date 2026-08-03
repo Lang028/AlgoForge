@@ -14,6 +14,20 @@ namespace AlgoForge.Models
         // Org admin toggle: whether attendees must confirm a face tag before it's visible (D6)
         public bool TagConfirmationRequired { get; set; } = true;
 
+        // Set once, at creation, and deliberately offered nowhere afterwards.
+        //
+        // Switching a link-shared gallery to a consent one would mean running face
+        // detection over photographs of people who were told none of that was happening,
+        // which is the opposite of what this product promises. Switching the other way is
+        // no better: it would strand tags and connections that attendees had already agreed
+        // to, and expose to a link the very photographs they had approved for members only.
+        public EventGalleryMode GalleryMode { get; set; } = EventGalleryMode.Consent;
+
+        // The secret in a link-shared gallery's URL. Null on consent events, which have no
+        // such link. Rotating it revokes every link handed out so far, and every browser
+        // still holding the cookie one was exchanged for.
+        public string? ShareToken { get; set; }
+
         public EventStatus Status { get; set; } = EventStatus.Draft;
 
         public ICollection<EventMembership> Memberships { get; set; } = new List<EventMembership>();

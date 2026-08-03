@@ -161,6 +161,17 @@ namespace AlgoForge.Controllers
 
             // Where the bytes land is IPhotoStorage's problem: App_Data in development,
             // Azure Blob in production. See IPhotoStorage for why the two differ.
+            //
+            // A link-shared gallery runs no detection at all, so nothing here is queued and
+            // no face embedding is ever computed for these photographs. Enforced at the
+            // point of upload rather than by hiding the results later: there is nobody to
+            // ask for consent on such an event, so there must be nothing collected that
+            // consent would have been needed for.
+            var detects = await _db.Events
+                .Where(e => e.Id == eventId)
+                .Select(e => e.GalleryMode)
+                .FirstOrDefaultAsync(HttpContext.RequestAborted) == EventGalleryMode.Consent;
+
             var uploaded = 0;
             var skipped = new List<string>();
 
@@ -195,7 +206,10 @@ namespace AlgoForge.Controllers
                     EventId = eventId,
                     UploadedByUserId = userId,
                     BlobUrl = blobUrl,
-                    UploadedAt = DateTime.UtcNow
+                    UploadedAt = DateTime.UtcNow,
+                    FaceProcessingStatus = detects
+                        ? PhotoFaceProcessingStatus.Pending
+                        : PhotoFaceProcessingStatus.NotApplicable
                 };
 
                 _db.Photos.Add(photo);
@@ -210,7 +224,11 @@ namespace AlgoForge.Controllers
                 // is saved with FaceProcessingStatus.Pending and the queue is what moves it
                 // to Processed or Failed. Clustering follows automatically once the whole
                 // event's queue drains, not from here.
-                _detectionQueue.Enqueue(photo.Id);
+                if (detects)
+                {
+                    _detectionQueue.Enqueue(photo.Id);
+                }
+
                 uploaded++;
             }
 
@@ -422,6 +440,11 @@ namespace AlgoForge.Controllers
         // /uploads, which meant anyone holding (or guessing) a URL could read a private
         // event's pictures with no account at all -- and the URL survived being removed
         // from the event. Every image in the app now comes through here instead.
+        // Anonymous is allowed *in* only so the share cookie can be examined -- the checks
+        // inside still refuse everyone who does not hold either it or event membership.
+        // Without this the controller's [Authorize] would redirect a link-shared viewer to
+        // a sign-in page for an account they were never meant to need.
+        [AllowAnonymous]
         [HttpGet]
         [Route("Photos/File/{id}")]
         public async Task<IActionResult> File(Guid id)
@@ -432,20 +455,26 @@ namespace AlgoForge.Controllers
                 return NotFound();
             }
 
-            var userIdText = _userManager.GetUserId(User);
-            if (userIdText is null || !Guid.TryParse(userIdText, out var viewerId))
+            // Tried first, and only ever satisfied by a link-shared event: a viewer here has
+            // no account at all, so the membership check below would send them to a sign-in
+            // page for a gallery whose whole premise is that it does not need one.
+            if (!await HoldsShareCookieAsync(photo.EventId))
             {
-                return Challenge();
-            }
+                var userIdText = _userManager.GetUserId(User);
+                if (userIdText is null || !Guid.TryParse(userIdText, out var viewerId))
+                {
+                    return Challenge();
+                }
 
-            var allowed = await _access.HasAnyRoleAsync(viewerId, photo.EventId, new[]
-            {
-                EventRole.Coordinator, EventRole.Photographer, EventRole.Attendee, EventRole.Delegate
-            }, HttpContext.RequestAborted);
+                var allowed = await _access.HasAnyRoleAsync(viewerId, photo.EventId, new[]
+                {
+                    EventRole.Coordinator, EventRole.Photographer, EventRole.Attendee, EventRole.Delegate
+                }, HttpContext.RequestAborted);
 
-            if (!allowed)
-            {
-                return Forbid();
+                if (!allowed)
+                {
+                    return Forbid();
+                }
             }
 
             var stream = await _storage.OpenReadAsync(photo, HttpContext.RequestAborted);
@@ -465,6 +494,8 @@ namespace AlgoForge.Controllers
         // GET /Photos/Download/{id} -- same access check as File, but sent as an
         // attachment. D5 and D20 give every member of the event, delegates included, the
         // right to keep a copy of the pictures they appear in.
+        // See File: anonymous in, still refused without the cookie or membership.
+        [AllowAnonymous]
         [HttpGet]
         [Route("Photos/Download/{id}")]
         public async Task<IActionResult> Download(Guid id)
@@ -528,23 +559,55 @@ namespace AlgoForge.Controllers
                 return (null, null);
             }
 
-            var userIdText = _userManager.GetUserId(User);
-            if (userIdText is null || !Guid.TryParse(userIdText, out var viewerId))
+            // Downloading is the point of a shared gallery, not a concession -- somebody
+            // handed a link is there to keep the photographs.
+            if (!await HoldsShareCookieAsync(photo.EventId))
             {
-                return (null, null);
-            }
+                var userIdText = _userManager.GetUserId(User);
+                if (userIdText is null || !Guid.TryParse(userIdText, out var viewerId))
+                {
+                    return (null, null);
+                }
 
-            var allowed = await _access.HasAnyRoleAsync(viewerId, photo.EventId, new[]
-            {
-                EventRole.Coordinator, EventRole.Photographer, EventRole.Attendee, EventRole.Delegate
-            }, HttpContext.RequestAborted);
+                var allowed = await _access.HasAnyRoleAsync(viewerId, photo.EventId, new[]
+                {
+                    EventRole.Coordinator, EventRole.Photographer, EventRole.Attendee, EventRole.Delegate
+                }, HttpContext.RequestAborted);
 
-            if (!allowed)
-            {
-                return (null, null);
+                if (!allowed)
+                {
+                    return (null, null);
+                }
             }
 
             return (photo, await _storage.OpenReadAsync(photo, HttpContext.RequestAborted));
+        }
+
+        // True only when the request carries a cookie holding this event's current share
+        // token, and the event is actually a link-shared one.
+        //
+        // The token is re-read from the database on every request rather than trusted from
+        // the cookie alone, so rotating it shuts out browsers that were already admitted --
+        // otherwise "revoke the link" would mean nothing to whoever had already used it.
+        // Consent events are refused outright: no cookie may ever stand in for membership
+        // of a gallery whose photographs attendees agreed to share with members only.
+        private async Task<bool> HoldsShareCookieAsync(Guid eventId)
+        {
+            var presented = Request.Cookies[ShareController.CookieName(eventId)];
+            if (string.IsNullOrEmpty(presented))
+            {
+                return false;
+            }
+
+            var expected = await _db.Events
+                .Where(e => e.Id == eventId && e.GalleryMode == EventGalleryMode.LinkShared)
+                .Select(e => e.ShareToken)
+                .FirstOrDefaultAsync(HttpContext.RequestAborted);
+
+            return !string.IsNullOrEmpty(expected)
+                && System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(
+                    System.Text.Encoding.UTF8.GetBytes(presented),
+                    System.Text.Encoding.UTF8.GetBytes(expected));
         }
 
         private static string ContentTypeFor(string path) =>
