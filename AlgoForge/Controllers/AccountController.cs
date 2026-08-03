@@ -12,12 +12,21 @@ namespace AlgoForge.Controllers
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly SignInManager<ApplicationUser> _signInManager;
         private readonly AlgoForgeDbContext _db;
+        private readonly Services.IEmailSender _emailSender;
+        private readonly ILogger<AccountController> _logger;
 
-        public AccountController(UserManager<ApplicationUser> userManager, SignInManager<ApplicationUser> signInManager, AlgoForgeDbContext db)
+        public AccountController(
+            UserManager<ApplicationUser> userManager,
+            SignInManager<ApplicationUser> signInManager,
+            AlgoForgeDbContext db,
+            Services.IEmailSender emailSender,
+            ILogger<AccountController> logger)
         {
             _userManager = userManager;
             _signInManager = signInManager;
             _db = db;
+            _emailSender = emailSender;
+            _logger = logger;
         }
 
         [HttpGet]
@@ -101,8 +110,15 @@ namespace AlgoForge.Controllers
                     await _db.SaveChangesAsync();
                 }
 
-                await _signInManager.SignInAsync(user, isPersistent: false);
-                return RedirectToLocal(returnUrl);
+                // Deliberately not signed in. The address has not been shown to belong to
+                // whoever just typed it, and on this product that is not a formality: the
+                // whole consent chain -- invitations, claim links, connection requests --
+                // is delivered by email, so an unverified address undermines the thing the
+                // app exists to guarantee. It also closes the cheapest attack available,
+                // which is signing up as staff under somebody else's identity.
+                await SendConfirmationEmailAsync(user);
+
+                return RedirectToAction(nameof(ConfirmationSent), new { email = user.Email });
             }
 
             foreach (var error in result.Errors)
@@ -137,6 +153,20 @@ namespace AlgoForge.Controllers
             if (user is null)
             {
                 ModelState.AddModelError(string.Empty, "Invalid login attempt.");
+                return View(model);
+            }
+
+            // Checked before the password, so an unconfirmed account cannot be signed into
+            // even with the right one. Attendees and delegates arrive already confirmed --
+            // opening a link sent to their address is the same proof this is asking for --
+            // so in practice this stops staff who registered themselves, which is exactly
+            // the population that needs stopping.
+            if (!await _userManager.IsEmailConfirmedAsync(user))
+            {
+                ViewData["UnconfirmedEmail"] = user.Email;
+                ModelState.AddModelError(string.Empty,
+                    "Confirm your email address before signing in. Check your inbox, and your spam folder.");
+
                 return View(model);
             }
 
@@ -281,6 +311,184 @@ namespace AlgoForge.Controllers
         public IActionResult AccessDenied()
         {
             return View();
+        }
+
+        // --- Email confirmation ------------------------------------------------
+
+        [HttpGet]
+        public IActionResult ConfirmationSent(string? email)
+        {
+            ViewData["Email"] = email;
+            return View();
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> ConfirmEmail(string? userId, string? token)
+        {
+            if (string.IsNullOrWhiteSpace(userId) || string.IsNullOrWhiteSpace(token))
+            {
+                return View("ConfirmEmailFailed");
+            }
+
+            var user = await _userManager.FindByIdAsync(userId);
+            if (user is null)
+            {
+                return View("ConfirmEmailFailed");
+            }
+
+            var result = await _userManager.ConfirmEmailAsync(user, token);
+            if (!result.Succeeded)
+            {
+                return View("ConfirmEmailFailed");
+            }
+
+            TempData["SuccessMessage"] = "Email confirmed. You can sign in now.";
+            return RedirectToAction(nameof(Login));
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> ResendConfirmation(string? email)
+        {
+            var user = string.IsNullOrWhiteSpace(email)
+                ? null
+                : await _userManager.FindByEmailAsync(email);
+
+            // Sent only when there is somebody unconfirmed to send it to, but the reply is
+            // the same either way -- otherwise this becomes a way to ask which addresses
+            // are registered.
+            if (user is not null && !await _userManager.IsEmailConfirmedAsync(user))
+            {
+                await SendConfirmationEmailAsync(user);
+            }
+
+            return RedirectToAction(nameof(ConfirmationSent), new { email });
+        }
+
+        private async Task SendConfirmationEmailAsync(ApplicationUser user)
+        {
+            var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
+
+            var link = Url.Action(
+                nameof(ConfirmEmail),
+                "Account",
+                new { userId = user.Id, token },
+                Request.Scheme)!;
+
+            var sent = await _emailSender.SendEmailAsync(
+                user.Email!,
+                "Confirm your Geeked On account",
+                $"Confirm your email address to finish setting up your account:\n\n{link}\n\n" +
+                "If you didn't create this account, you can ignore this message.");
+
+            if (!sent)
+            {
+                // Worth a log line of its own: the person is now holding an account they
+                // cannot sign into, and nothing on their screen distinguishes that from an
+                // email that simply has not arrived yet.
+                _logger.LogError(
+                    "Confirmation email to {Email} could not be sent; that account cannot sign in until it is.",
+                    user.Email);
+            }
+        }
+
+        // --- Forgotten passwords -----------------------------------------------
+
+        [HttpGet]
+        public IActionResult ForgotPassword() => View();
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> ForgotPassword(ForgotPasswordViewModel model)
+        {
+            if (!ModelState.IsValid)
+            {
+                return View(model);
+            }
+
+            var user = await _userManager.FindByEmailAsync(model.Email.Trim());
+
+            // Same page whether or not the address is registered. Saying "no such account"
+            // would turn this form into a way to test who has one, and on this product the
+            // guest list of an event is exactly what must not be answerable.
+            //
+            // An unconfirmed account is skipped too: letting a reset link double as proof
+            // of the address would route straight around the confirmation gate.
+            if (user is not null && await _userManager.IsEmailConfirmedAsync(user))
+            {
+                var token = await _userManager.GeneratePasswordResetTokenAsync(user);
+
+                var link = Url.Action(
+                    nameof(ResetPassword),
+                    "Account",
+                    new { userId = user.Id, token },
+                    Request.Scheme)!;
+
+                await _emailSender.SendEmailAsync(
+                    user.Email!,
+                    "Reset your Geeked On password",
+                    $"Use this link to choose a new password:\n\n{link}\n\n" +
+                    "If you didn't ask for this, nothing has changed and you can ignore it.");
+            }
+
+            return RedirectToAction(nameof(ForgotPasswordSent));
+        }
+
+        [HttpGet]
+        public IActionResult ForgotPasswordSent() => View();
+
+        [HttpGet]
+        public IActionResult ResetPassword(string? userId, string? token)
+        {
+            if (string.IsNullOrWhiteSpace(userId) || string.IsNullOrWhiteSpace(token))
+            {
+                return View("ResetPasswordFailed");
+            }
+
+            return View(new ResetPasswordViewModel { UserId = userId, Token = token });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> ResetPassword(ResetPasswordViewModel model)
+        {
+            if (!ModelState.IsValid)
+            {
+                return View(model);
+            }
+
+            var user = await _userManager.FindByIdAsync(model.UserId);
+            if (user is null)
+            {
+                return View("ResetPasswordFailed");
+            }
+
+            var result = await _userManager.ResetPasswordAsync(user, model.Token, model.Password);
+            if (!result.Succeeded)
+            {
+                foreach (var error in result.Errors)
+                {
+                    ModelState.AddModelError(string.Empty, error.Description);
+                }
+
+                return View(model);
+            }
+
+            // Someone who has just proved they hold the address has proved the same thing
+            // confirmation asks for, so an account still waiting on that is let through
+            // here rather than being told to go and find an older email.
+            if (!await _userManager.IsEmailConfirmedAsync(user))
+            {
+                user.EmailConfirmed = true;
+                await _userManager.UpdateAsync(user);
+            }
+
+            // A reset is also how somebody locked out gets back in without waiting.
+            await _userManager.ResetAccessFailedCountAsync(user);
+            await _userManager.SetLockoutEndDateAsync(user, null);
+
+            TempData["SuccessMessage"] = "Password changed. You can sign in now.";
+            return RedirectToAction(nameof(Login));
         }
 
         private IActionResult RedirectToLocal(string? returnUrl)
