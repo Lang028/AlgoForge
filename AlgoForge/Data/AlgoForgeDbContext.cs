@@ -68,6 +68,13 @@ namespace AlgoForge.Data
                 .HasForeignKey(a => a.ClaimedByUserId)
                 .OnDelete(DeleteBehavior.Restrict);
 
+            // One row per person per event, enforced by the database rather than only by
+            // the import paths. Two records for one attendee splits their identity in half:
+            // detections cluster onto one, the tags they confirm attach to the other.
+            builder.Entity<Attendee>()
+                .HasIndex(a => new { a.EventId, a.Email })
+                .IsUnique();
+
             builder.Entity<Photo>()
                 .HasOne(p => p.UploadedByUser)
                 .WithMany()
