@@ -1,0 +1,37 @@
+@{
+    ViewData["Title"] = "Check your email";
+    var email = ViewData["Email"] as string;
+}
+
+<div class="gk-hero my-2">
+    <h1>Check your email</h1>
+    <div class="crumb">Geeked On <span class="sep">&rsaquo;</span> Confirm your address</div>
+</div>
+
+<div class="gk-panel mt-3" style="max-width: 560px;">
+    <p>
+        @if (string.IsNullOrWhiteSpace(email))
+        {
+            <text>We've sent you a link to confirm your email address.</text>
+        }
+        else
+        {
+            <text>We've sent a link to <strong>@email</strong>.</text>
+        }
+    </p>
+    <p>
+        Open it to finish setting up your account. You won't be able to sign in until you do.
+    </p>
+    <p class="text-muted" style="font-size:.85rem;">
+        Nothing yet? It can take a minute, and it's worth checking your spam folder.
+    </p>
+
+    <form method="post" asp-action="ResendConfirmation" class="mt-3">
+        <input type="hidden" name="email" value="@email" />
+        <button type="submit" class="btn gk-btn-soft gk-btn-sm">Send it again</button>
+    </form>
+
+    <div class="mt-3">
+        <a asp-action="Login">Back to sign in</a>
+    </div>
+</div>

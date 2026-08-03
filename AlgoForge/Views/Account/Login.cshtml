@@ -213,6 +213,23 @@
                 <button type="submit" class="btn-auth">Sign in</button>
             </form>
 
+            @* Offered only once we know which address is waiting on confirmation, so the
+               page never hints at whether an address is registered until the person has
+               already proved they know the password for it. *@
+            @if (ViewData["UnconfirmedEmail"] is string unconfirmed)
+            {
+                <form method="post" asp-action="ResendConfirmation" class="mt-2">
+                    <input type="hidden" name="email" value="@unconfirmed" />
+                    <button type="submit" class="btn btn-link p-0" style="font-size:.82rem;">
+                        Resend the confirmation email
+                    </button>
+                </form>
+            }
+
+            <div class="mt-2">
+                <a asp-action="ForgotPassword" style="font-size:.82rem;">Forgotten your password?</a>
+            </div>
+
             <div class="auth-alt">
                 @* returnUrl is carried across deliberately. An attendee arrives here from an
                    emailed /Claim/{token} link and usually has no account yet, so this is the
