@@ -1,10 +1,10 @@
-# Geeked On
+# AlgoForge
 
 **Organisation-managed event photography and attendee reconnection platform.**
 
-Geeked On lets organisations run photo galleries for their events, automatically groups the faces in those photos, and — with each person's explicit consent — tags attendees so they can find their photos and reconnect with the people they met. Built as a Demo Day project by AlgoForge (Group 12), Durban University of Technology.
+AlgoForge lets organisations run photo galleries for their events, automatically groups the faces in those photos, and — with each person's explicit consent — tags attendees so they can find their photos and reconnect with the people they met.
 
-> The core idea: event photos are full of people you meant to follow up with and never did. Geeked On turns a photo gallery into a consent-based networking layer.
+> The core idea: event photos are full of people you meant to follow up with and never did. AlgoForge turns a photo gallery into a consent-based networking layer.
 
 ---
 
@@ -80,7 +80,11 @@ Events move through `Draft → Live → PostEvent → Archived`. Uploads are onl
 - [.NET 8 SDK](https://dotnet.microsoft.com/download)
 - [Python 3.11+](https://www.python.org/downloads/) (face pipeline)
 - SQL Server (LocalDB is fine for development)
-- An Azure Storage account, or [Azurite](https://learn.microsoft.com/azure/storage/common/storage-use-azurite) for local emulation
+
+> **What the Architecture section above describes is the target design.** As it stands
+> today photos are written to `AlgoForge/App_Data/uploads` on the local disk and served
+> through an authorising action, and the pipeline is called directly rather than through a
+> queue. So there is **no Azure Storage or Azurite to install** to run this locally.
 
 ### Run the web app
 
@@ -107,6 +111,11 @@ pip install -r requirements.txt
 uvicorn main:app --port 8000
 ```
 
+**The first start is slow and needs internet.** `yolo11s.pt` is committed so it arrives
+with the clone, but InsightFace fetches its `buffalo_l` models (~300MB) on first use and
+caches them in `~/.insightface`. Installing `torch` pulls roughly 2GB on top of that.
+Budget time for the first run on a new machine; every run after that is offline and fast.
+
 Check what it can actually do:
 
 ```bash
@@ -131,11 +140,67 @@ Run the clustering tests (no models required — they use synthetic embeddings):
 cd face_service && python -m pytest tests -q
 ```
 
+## Deployment
+
+**Nobody using the site installs anything.** Attendees, photographers and organisations
+open a browser. That is the whole client requirement — no Python, no models, no .NET.
+
+Python is a *server* concern. The face service is an internal component the web app talks
+to; it is never reachable by, or visible to, a visitor:
+
+```
+   Browser  ──HTTPS──▶  ASP.NET Core app  ──HTTP──▶  face_service (Python)
+  (nothing                     │              private,   InsightFace + YOLO
+   installed)                  ▼              not public
+                          SQL Server
+```
+
+So a deployment installs, on the server side only:
+
+| Component | What the host needs |
+|---|---|
+| Web app | ASP.NET Core 8 runtime (or self-contained publish) |
+| Face service | Python 3.11 + `requirements.txt` + the InsightFace models |
+| Database | SQL Server — a real instance, not LocalDB |
+| Photos | A writable path for `App_Data/uploads`, or blob storage |
+
+Three ways to arrange that, cheapest first:
+
+1. **One machine.** Publish the .NET app behind IIS or Nginx, and run
+   `uvicorn main:app --port 8000` as a service (systemd, or NSSM on Windows) bound to
+   `127.0.0.1` so only the web app can reach it. Simplest, and enough for a demo or a
+   small production load.
+2. **Two containers.** One image for the app, one for `face_service`, on the same private
+   network. The models are best baked into the Python image at build time so a cold start
+   is not a 300MB download.
+3. **Separate hosts.** The face service on its own box — worth it only when detection load
+   justifies scaling it independently of the site.
+
+The app finds the service through configuration, so nothing is hard-coded:
+
+```json
+"PersonPipeline": { "BaseUrl": "http://127.0.0.1:8000" }
+```
+
+Point that at wherever the service actually lives in each environment.
+
+### Before going live
+
+- **Database.** Move off LocalDB. It is a developer convenience that starts on demand and
+  stops when idle, which is not what a server does.
+- **Email.** `OutboxEmailSender` writes messages to disk for the demo. Swap in a real
+  provider or no invitation will ever arrive.
+- **Face processing is synchronous.** It runs inside the upload request, which is fine for
+  a handful of photos and will time out on a large batch. The queue in the architecture
+  diagram is the fix, and the seam for it is the pipeline call in `PhotosController`.
+- **Secrets.** The connection string and any provider keys belong in environment variables
+  or a secret store, not `appsettings.json`.
+
 Configuration (connection strings, blob credentials, queue names) is read from `appsettings.Development.json` and environment variables — see `appsettings.example.json` for the required keys. Never commit real credentials.
 
 ## Project structure
 
-Kept the `AlgoForge` project/repo naming rather than renaming to `GeekedOn.*`:
+Project layout:
 
 ```
 AlgoForge/
@@ -153,10 +218,6 @@ Scoped out of the current build, deliberately:
 - Delegate-specific privacy controls
 - Face blur on tag rejection (rejection currently removes the association only)
 - Multi-day events for appearance matching (people change clothes overnight; v1 assumes one-day events where outfit + hair are stable — chasing the perfect system first would be the downfall)
-
-## Team
-
-Built by **AlgoForge — Group 12**, Application Development, Durban University of Technology.
 
 ## Licence
 

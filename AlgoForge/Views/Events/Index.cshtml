@@ -27,30 +27,6 @@
         overflow: hidden;
     }
 
-    .events-hero::before,
-    .events-hero::after {
-        content: "";
-        position: absolute;
-        border-radius: 50%;
-        filter: blur(60px);
-        opacity: .45;
-    }
-
-    .events-hero::before {
-        width: 260px;
-        height: 260px;
-        background: #f4502a;
-        top: -80px;
-        right: -60px;
-    }
-
-    .events-hero::after {
-        width: 220px;
-        height: 220px;
-        background: #7c5cfc;
-        bottom: -90px;
-        left: 30%;
-    }
 
     .events-hero h1 {
         font-weight: 800;
@@ -69,10 +45,10 @@
         z-index: 1;
     }
 
-    .events-hero .crumb .sep { margin: 0 .4rem; color: #f4502a; }
+    .events-hero .crumb .sep { margin: 0 .4rem; color: #0ea5e9; }
 
     .events-hero .btn-create {
-        background: #f4502a;
+        background: #0ea5e9;
         color: #fff;
         border-radius: 999px;
         font-weight: 600;
@@ -82,7 +58,7 @@
         z-index: 1;
     }
 
-    .events-hero .btn-create:hover { background: #d84523; color: #fff; }
+    .events-hero .btn-create:hover { background: #0284c7; color: #fff; }
 
     /* ---------- cards ---------- */
     .event-card {
@@ -109,7 +85,7 @@
     }
 
     .event-cover.placeholder {
-        background: linear-gradient(135deg, #14141c 0%, #7c5cfc 60%, #f4502a 120%);
+        background: #14141c;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -141,8 +117,10 @@
         padding: .28rem .7rem;
     }
 
-    .status-pill.live { background: #f4502a; }
-    .status-pill.draft { background: #7c5cfc; }
+    /* Draft was the same sky blue as Live, so the one thing the pill exists to tell you
+       apart -- whether attendees can see this event yet -- was invisible at a glance. */
+    .status-pill.live { background: #0ea5e9; }
+    .status-pill.draft { background: #f59e0b; }
     .status-pill.post { background: #14141c; }
     .status-pill.archived { background: #9ca3af; }
 
@@ -156,7 +134,7 @@
 
     .event-org {
         font-size: .78rem;
-        color: #f4502a;
+        color: #0ea5e9;
         font-weight: 600;
         margin-bottom: .9rem;
     }
@@ -182,11 +160,11 @@
     }
 
     .btn-coral {
-        background: #f4502a;
+        background: #0ea5e9;
         color: #fff;
     }
 
-    .btn-coral:hover { background: #d84523; color: #fff; }
+    .btn-coral:hover { background: #0284c7; color: #fff; }
 
     .btn-soft {
         background: #f3f4f6;
@@ -200,7 +178,7 @@
     <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
         <div>
             <h1>Events</h1>
-            <div class="crumb">Geeked On <span class="sep">&rsaquo;</span> Events</div>
+            <div class="crumb">AlgoForge <span class="sep">&rsaquo;</span> Events</div>
         </div>
         <a class="btn btn-create" asp-action="Create">+ Create event</a>
     </div>
@@ -242,23 +220,79 @@ else
                     <div class="event-body">
                         <div class="event-meta">
                             <span class="status-pill @PillClass(evt.Status)">@evt.Status</span>
-                            <small>@evt.EventDate.ToString("yyyy-MM-dd")</small>
+                            <small>@evt.EventDate.ToString("dd MMM yyyy")</small>
                         </div>
                         <h5>@evt.Name</h5>
-                        <div class="event-org">&#128205; @evt.OrganisationName</div>
-                        <div class="event-stats">
-                            @evt.PhotoCount photo@(evt.PhotoCount == 1 ? "" : "s") &middot;
-                            @evt.AttendeeCount attendee@(evt.AttendeeCount == 1 ? "" : "s")
+                        <div class="event-org">
+                            @if (evt.OrganisationName is null)
+                            {
+                                <span title="You run this event yourself">&#128100; No organisation</span>
+                            }
+                            else
+                            {
+                                <span>&#128205; @evt.OrganisationName</span>
+                            }
                         </div>
+                        <div class="event-stats">
+                            @evt.PhotoCount photo@(evt.PhotoCount == 1 ? "" : "s")
+                            @* Attendees are a consent-gallery idea; a shared link has none. *@
+                            @if (evt.GalleryMode == EventGalleryMode.Consent)
+                            {
+                                <text>&middot; @evt.AttendeeCount attendee@(evt.AttendeeCount == 1 ? "" : "s")</text>
+                            }
+                            else
+                            {
+                                <text>&middot; shared by link</text>
+                            }
+                        </div>
+
+                        @if (evt.ShareUrl is not null)
+                        {
+                            <div class="mb-2">
+                                <input type="text" class="form-control form-control-sm gk-share-url"
+                                       value="@evt.ShareUrl" readonly
+                                       style="font-size:.72rem;"
+                                       onclick="this.select();" />
+                                <button type="button" class="btn btn-link p-0 gk-copy-share"
+                                        data-share-url="@evt.ShareUrl" style="font-size:.75rem;">
+                                    Copy gallery link
+                                </button>
+                            </div>
+                        }
                         <div class="event-actions">
                             <a class="btn btn-coral" asp-controller="Photos" asp-action="Index" asp-route-eventId="@evt.Id">Gallery</a>
-                            <a class="btn btn-soft" asp-controller="Photos" asp-action="Upload" asp-route-eventId="@evt.Id">Upload</a>
-                            <a class="btn btn-soft" asp-action="Attendees" asp-route-eventId="@evt.Id">Attendees</a>
-                            <a class="btn btn-soft" asp-action="ImportAttendees" asp-route-eventId="@evt.Id">Import CSV</a>
+                            @if (evt.CanUpload)
+                            {
+                                <a class="btn btn-soft" asp-controller="Photos" asp-action="Upload" asp-route-eventId="@evt.Id">Upload</a>
+                            }
+                            @if (evt.CanManageAttendees)
+                            {
+                                <a class="btn btn-soft" asp-action="Attendees" asp-route-eventId="@evt.Id">Attendees</a>
+                                <a class="btn btn-soft" asp-action="ImportAttendees" asp-route-eventId="@evt.Id">Import CSV</a>
+                            }
+                            @if (evt.OrganisationName is null && evt.CanHandOver)
+                            {
+                                <a class="btn btn-soft" asp-controller="Handover" asp-action="Index" asp-route-eventId="@evt.Id">Hand over</a>
+                            }
                         </div>
                     </div>
                 </div>
             </div>
         }
     </div>
+}
+
+@section Scripts {
+    <script>
+        // Attendee cards elsewhere use the same pattern for their claim links.
+        document.querySelectorAll('.gk-copy-share').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                navigator.clipboard.writeText(btn.dataset.shareUrl).then(function () {
+                    var original = btn.textContent;
+                    btn.textContent = 'Copied';
+                    setTimeout(function () { btn.textContent = original; }, 1500);
+                });
+            });
+        });
+    </script>
 }

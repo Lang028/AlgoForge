@@ -41,6 +41,15 @@ namespace AlgoForge.Controllers
                 return Challenge();
             }
 
+            // Connecting is an attendee concern. A coordinator or photographer runs the
+            // event; they are not attending it, and the people in the gallery did not
+            // consent to being approached by the staff. Delegates are excluded too --
+            // D5 gives them view and download and no write actions.
+            if (!await IsAttendeeSomewhereAsync(viewerId.Value))
+            {
+                return View("NotForYou");
+            }
+
             var connections = await _db.Connections
                 .Where(c => c.RequesterId == viewerId || c.ReceiverId == viewerId)
                 .Include(c => c.Requester)
@@ -64,14 +73,15 @@ namespace AlgoForge.Controllers
         // POST /Connections/Request -- sent from a face in the gallery. Named Send() because
         // a Request() action would hide ControllerBase.Request, which this method needs.
         //
-        // Delegates are excluded on purpose: D5 gives them view and download and no write
-        // actions at all, and reaching out to someone is very much a write. The confirmed-tag
-        // check below guards who you may reach; this guards whether you had any business in
-        // the event to begin with, which it previously did not check.
+        // Attendee-only. Delegates are excluded because D5 gives them view and download and
+        // no write actions at all, and reaching out to someone is very much a write.
+        // Coordinators and photographers are excluded because they are running the event
+        // rather than attending it -- the people in the gallery consented to being
+        // identified to fellow attendees, not to being approached by the staff.
         [HttpPost]
         [ActionName("Request")]
         [ValidateAntiForgeryToken]
-        [RequireEventRole(EventRole.Coordinator, EventRole.Photographer, EventRole.Attendee)]
+        [RequireEventRole(EventRole.Attendee)]
         public async Task<IActionResult> Send(Guid eventId, Guid attendeeId)
         {
             var viewerId = CurrentUserId();
@@ -136,14 +146,17 @@ namespace AlgoForge.Controllers
             var respondUrl = Url.Action(nameof(Respond), "Connections",
                 new { token = connection.ResponseToken }, Request.Scheme)!;
 
-            await _emailSender.SendEmailAsync(attendee.Email,
+            var sent = await _emailSender.SendEmailAsync(attendee.Email,
                 $"{requesterName} wants to connect",
                 $"You were both at {(await _db.Events.FindAsync(eventId))?.Name}. " +
                 $"Accept or decline here: {respondUrl}");
 
-            TempData["SuccessMessage"] =
-                $"Request sent to {attendee.Name}. They'll see your details once they accept. " +
-                $"Respond link (dev mode, not actually emailed): {respondUrl}";
+            // The respond link is deliberately not shown to the requester: only the person
+            // it was addressed to may act on it, and dangling it in front of the one party
+            // who must not use it invites exactly that attempt.
+            TempData[sent ? "SuccessMessage" : "ErrorMessage"] = sent
+                ? $"Request sent to {attendee.Name}. They'll see your details once they accept."
+                : $"Your request to {attendee.Name} was saved, but we couldn't email them. They'll see it next time they sign in.";
 
             return BackToGallery(eventId);
         }
@@ -288,6 +301,12 @@ namespace AlgoForge.Controllers
             var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId);
             return string.IsNullOrWhiteSpace(user?.DisplayName) ? "Someone" : user!.DisplayName;
         }
+
+        // Accepting and declining are guarded by ReceiverId, so they can't be reached by
+        // anyone but the attendee who was asked. This is for the pages with no connection
+        // in hand -- the inbox itself.
+        private Task<bool> IsAttendeeSomewhereAsync(Guid userId) =>
+            _db.EventMemberships.AnyAsync(m => m.UserId == userId && m.Role == EventRole.Attendee);
 
         private IActionResult BackToGallery(Guid eventId) =>
             RedirectToAction("Index", "Photos", new { eventId });

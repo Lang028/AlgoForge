@@ -26,5 +26,10 @@ namespace AlgoForge.Models
 
         // D11: attendee-controlled opt-in to show contact details without an accepted connection.
         public bool ContactsVisible { get; set; } = false;
+
+        /// <summary>What the attendee does -- their role, company, or a line about themselves.
+        /// Written by the attendee, shown to other members of the same event beside their name.
+        /// Unlike ContactInfo this is not a way to reach them, so it needs no connection.</summary>
+        public string About { get; set; } = string.Empty;
     }
 }

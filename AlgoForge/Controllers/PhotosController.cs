@@ -16,22 +16,31 @@ namespace AlgoForge.Controllers
     {
         private readonly AlgoForgeDbContext _db;
         private readonly PersonPipelineService _pipeline;
+        private readonly PhotoDetectionQueue _detectionQueue;
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly IWebHostEnvironment _env;
         private readonly ILogger<PhotosController> _logger;
+        private readonly IEventAccessService _access;
+        private readonly IPhotoStorage _storage;
 
         public PhotosController(
             AlgoForgeDbContext db,
             PersonPipelineService pipeline,
+            PhotoDetectionQueue detectionQueue,
             UserManager<ApplicationUser> userManager,
             IWebHostEnvironment env,
-            ILogger<PhotosController> logger)
+            ILogger<PhotosController> logger,
+            IEventAccessService access,
+            IPhotoStorage storage)
         {
             _db = db;
             _pipeline = pipeline;
+            _detectionQueue = detectionQueue;
             _userManager = userManager;
             _env = env;
             _logger = logger;
+            _access = access;
+            _storage = storage;
         }
 
         [HttpGet]
@@ -69,15 +78,6 @@ namespace AlgoForge.Controllers
             }
 
             var (uploaded, skipped) = await StoreAndDetectAsync(eventId, userId, files);
-
-            // One clustering pass for the whole batch. A pipeline outage must not lose the
-            // uploaded photos: they are already saved and can be re-clustered from the
-            // review grid once the service is back.
-            if (uploaded > 0 && !await TryReclusterAsync(eventId))
-            {
-                TempData["ErrorMessage"] =
-                    "Photos uploaded, but grouping people failed. Use Re-cluster on the identify page to retry.";
-            }
 
             ReportOutcome(uploaded, skipped);
             return RedirectToAction(nameof(Index), new { eventId });
@@ -121,18 +121,22 @@ namespace AlgoForge.Controllers
             return Json(new { uploaded, skipped });
         }
 
-        // Runs the single clustering pass once the last batch has landed, and records the
-        // run's totals for the gallery to show.
+        // Records the run's totals for the gallery to show, once the last batch has landed.
         //
         // The tallies come back from the client because they were accumulated across many
         // requests and no single one of them knows the whole story. They are display-only --
         // nothing is authorised or written from them -- so a client that reports nonsense
         // only misleads itself about its own upload.
+        //
+        // Clustering used to run here too, once per whole upload. It no longer does: detection
+        // itself is now a background queue (PhotoDetectionWorker), so the photos this call
+        // reports on may not be detected yet, and clustering them now would just cluster
+        // whatever happened to finish first. The worker triggers clustering itself once the
+        // event's queue is actually empty.
         [HttpPost]
         [ValidateAntiForgeryToken]
         [RequireEventRole(EventRole.Photographer)]
-        public async Task<IActionResult> FinishUpload(
-            Guid eventId, int uploaded, List<string>? skipped)
+        public async Task<IActionResult> FinishUpload(Guid eventId, int uploaded, List<string>? skipped)
         {
             var evt = await _db.Events.FindAsync(eventId);
             if (evt is null)
@@ -140,25 +144,13 @@ namespace AlgoForge.Controllers
                 return NotFound();
             }
 
-            var clustered = true;
-            if (uploaded > 0)
-            {
-                clustered = await TryReclusterAsync(eventId);
-            }
-
             ReportOutcome(uploaded, skipped ?? new List<string>());
 
-            if (!clustered)
-            {
-                TempData["ErrorMessage"] =
-                    "Photos uploaded, but grouping people failed. Use Re-cluster on the identify page to retry.";
-            }
-
-            return Json(new { clustered });
+            return Json(new { uploaded });
         }
 
-        // Stores each accepted file and runs detection on it. Shared by the plain form post
-        // and the batched folder upload so both apply exactly the same validation.
+        // Stores each accepted file and queues it for detection. Shared by the plain form
+        // post and the batched folder upload so both apply exactly the same validation.
         private async Task<(int Uploaded, List<string> Skipped)> StoreAndDetectAsync(
             Guid eventId, Guid userId, List<IFormFile>? files)
         {
@@ -167,14 +159,18 @@ namespace AlgoForge.Controllers
             // browser-side filter has finished with it.
             files ??= new List<IFormFile>();
 
-            // App_Data, not wwwroot: wwwroot is watched by dotnet watch / Visual Studio hot
-            // reload, so writing uploads there makes every upload look like a source change --
-            // the dev server re-evaluates the project and refreshes the browser mid-upload,
-            // which killed the batched uploader from the photographer's point of view.
-            // Program.cs maps this directory back onto the same /uploads URL.
-            var uploadsDir = Path.Combine(
-                _env.ContentRootPath, "App_Data", "uploads", eventId.ToString());
-            Directory.CreateDirectory(uploadsDir);
+            // Where the bytes land is IPhotoStorage's problem: App_Data in development,
+            // Azure Blob in production. See IPhotoStorage for why the two differ.
+            //
+            // A link-shared gallery runs no detection at all, so nothing here is queued and
+            // no face embedding is ever computed for these photographs. Enforced at the
+            // point of upload rather than by hiding the results later: there is nobody to
+            // ask for consent on such an event, so there must be nothing collected that
+            // consent would have been needed for.
+            var detects = await _db.Events
+                .Where(e => e.Id == eventId)
+                .Select(e => e.GalleryMode)
+                .FirstOrDefaultAsync(HttpContext.RequestAborted) == EventGalleryMode.Consent;
 
             var uploaded = 0;
             var skipped = new List<string>();
@@ -196,11 +192,12 @@ namespace AlgoForge.Controllers
 
                 var photoId = Guid.NewGuid();
                 var fileName = $"{photoId}{inspection.Extension}";
-                var filePath = Path.Combine(uploadsDir, fileName);
 
-                await using (var stream = new FileStream(filePath, FileMode.Create))
+                string blobUrl;
+                await using (var source = file.OpenReadStream())
                 {
-                    await file.CopyToAsync(stream, HttpContext.RequestAborted);
+                    blobUrl = await _storage.SaveAsync(
+                        eventId, fileName, source, HttpContext.RequestAborted);
                 }
 
                 var photo = new Photo
@@ -208,40 +205,166 @@ namespace AlgoForge.Controllers
                     Id = photoId,
                     EventId = eventId,
                     UploadedByUserId = userId,
-                    BlobUrl = $"/uploads/{eventId}/{fileName}",
-                    UploadedAt = DateTime.UtcNow
+                    BlobUrl = blobUrl,
+                    UploadedAt = DateTime.UtcNow,
+                    FaceProcessingStatus = detects
+                        ? PhotoFaceProcessingStatus.Pending
+                        : PhotoFaceProcessingStatus.NotApplicable
                 };
 
                 _db.Photos.Add(photo);
 
-                // Detection only -- no clustering here. Clustering is per-event and runs
-                // once after the batch, which is both correct (photo 1 can now be grouped
-                // using evidence from photo 300) and far cheaper than the old
-                // re-cluster-per-photo approach.
-                //
-                // Still synchronous, and still the wrong place for this: D16 says never in
-                // the request path. The seam to fix it is right here -- enqueue instead of
-                // awaiting.
-                await _pipeline.ProcessPhotoAsync(photo, filePath);
+                // Saved before detection runs, not after. A database hiccup during detection
+                // must not lose a photo that is already safely on disk. LocalDB stopping
+                // itself while idle is exactly that hiccup, and it is why the connection is
+                // configured to retry at all.
                 await _db.SaveChangesAsync();
+
+                // Detection runs off this request entirely (PhotoDetectionWorker) -- the row
+                // is saved with FaceProcessingStatus.Pending and the queue is what moves it
+                // to Processed or Failed. Clustering follows automatically once the whole
+                // event's queue drains, not from here.
+                if (detects)
+                {
+                    _detectionQueue.Enqueue(photo.Id);
+                }
+
                 uploaded++;
             }
 
             return (uploaded, skipped);
         }
 
-        private async Task<bool> TryReclusterAsync(Guid eventId)
+        // POST /Photos/{eventId}/RetryDetection
+        //
+        // Queues detection again for the photos in an event that never got any. Until this
+        // existed, a photo uploaded while the Python service was down was stuck: detection
+        // only ran on the upload path, and Re-cluster cannot help because it groups
+        // existing detections rather than creating them. The only remedy was deleting the
+        // photographs and uploading them a second time.
+        //
+        // This is also the no-JavaScript fallback for the identify page's progress bar (see
+        // RetryDetectionPending/Batch below). It used to be the ONLY path, and used to block
+        // the request until every photo was done -- minutes, for a few hundred photos, with
+        // nothing on screen. Now it just enqueues and redirects immediately; the background
+        // worker does the rest regardless of which path queued the work.
+        [HttpPost]
+        [Route("Photos/{eventId}/RetryDetection")]
+        [ValidateAntiForgeryToken]
+        [RequireEventRole(EventRole.Coordinator, EventRole.Photographer)]
+        public async Task<IActionResult> RetryDetection(Guid eventId)
         {
-            try
+            var pending = await _db.Photos
+                .Where(p => p.EventId == eventId
+                            && p.Status == PhotoStatus.Visible
+                            && p.FaceProcessingStatus != PhotoFaceProcessingStatus.Processed)
+                .ToListAsync();
+
+            if (pending.Count == 0)
             {
-                await _pipeline.ReclusterEventAsync(eventId);
-                return true;
+                TempData["SuccessMessage"] = "Every photo in this event has already been processed.";
+                return RedirectToAction("Index", "Clusters", new { eventId });
             }
-            catch (Exception ex)
+
+            // See RetryDetectionBatch for why this flips to Pending rather than just enqueueing:
+            // a retried photo starts at Failed, and DetectionStatus needs Pending to mean
+            // "queued or in flight" for a retry the same way it already does for an upload.
+            foreach (var photo in pending)
             {
-                _logger.LogError(ex, "Clustering failed for event {EventId} after upload.", eventId);
-                return false;
+                photo.FaceProcessingStatus = PhotoFaceProcessingStatus.Pending;
             }
+            await _db.SaveChangesAsync();
+
+            foreach (var photo in pending)
+            {
+                _detectionQueue.Enqueue(photo.Id);
+            }
+
+            TempData["SuccessMessage"] =
+                $"Detection queued for {pending.Count} photo(s) -- refresh this page in a bit to see the new groups.";
+            return RedirectToAction("Index", "Clusters", new { eventId });
+        }
+
+        // --- Retry detection, polled for a progress bar ----------------------------
+        //
+        // The plain RetryDetection action above stays as the no-JavaScript fallback. With
+        // JavaScript the identify page instead asks for the pending photo ids, queues them,
+        // then polls DetectionStatus until the event's queue is empty -- there is nothing
+        // left here to block on or batch for timeout reasons, since queueing is instant;
+        // the batching that remains is just to keep any one request's photoIds list modest.
+        [HttpGet]
+        [RequireEventRole(EventRole.Coordinator, EventRole.Photographer)]
+        public async Task<IActionResult> RetryDetectionPending(Guid eventId)
+        {
+            var photoIds = await _db.Photos
+                .Where(p => p.EventId == eventId
+                            && p.Status == PhotoStatus.Visible
+                            && p.FaceProcessingStatus != PhotoFaceProcessingStatus.Processed)
+                .Select(p => p.Id)
+                .ToListAsync();
+
+            return Json(new { photoIds });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        [RequireEventRole(EventRole.Coordinator, EventRole.Photographer)]
+        public async Task<IActionResult> RetryDetectionBatch(Guid eventId, List<Guid> photoIds)
+        {
+            photoIds ??= new List<Guid>();
+
+            // Re-validated against the event rather than trusted: the id list is client
+            // supplied, and this is the only thing standing between a crafted request and
+            // queueing detection for a photo in a different event.
+            var photos = await _db.Photos
+                .Where(p => p.EventId == eventId
+                            && photoIds.Contains(p.Id)
+                            && p.Status == PhotoStatus.Visible
+                            && p.FaceProcessingStatus != PhotoFaceProcessingStatus.Processed)
+                .ToListAsync();
+
+            // A retried photo is sitting at Failed, not Pending -- enqueueing alone doesn't
+            // change that row, so DetectionStatus (and the progress bar polling it) would see
+            // nothing "pending" until the worker actually gets to it. Marking it Pending here,
+            // the moment it's queued, is what makes "pending" mean "queued or in flight" for a
+            // retry the same way it already does for a fresh upload.
+            foreach (var photo in photos)
+            {
+                photo.FaceProcessingStatus = PhotoFaceProcessingStatus.Pending;
+            }
+            await _db.SaveChangesAsync();
+
+            foreach (var photo in photos)
+            {
+                _detectionQueue.Enqueue(photo.Id);
+            }
+
+            return Json(new { enqueued = photos.Count });
+        }
+
+        // Polled by both the upload page and the identify page's retry-detection progress
+        // bar: "how much of this event's queue is left" is the same question either way,
+        // and the answer lives entirely on the Photos rows -- no separate job-tracking state
+        // to keep in sync with them.
+        [HttpGet]
+        [RequireEventRole(EventRole.Coordinator, EventRole.Photographer)]
+        public async Task<IActionResult> DetectionStatus(Guid eventId)
+        {
+            var counts = await _db.Photos
+                .Where(p => p.EventId == eventId && p.Status == PhotoStatus.Visible)
+                .GroupBy(p => p.FaceProcessingStatus)
+                .Select(g => new { Status = g.Key, Count = g.Count() })
+                .ToListAsync();
+
+            int CountOf(PhotoFaceProcessingStatus status) =>
+                counts.FirstOrDefault(c => c.Status == status)?.Count ?? 0;
+
+            return Json(new
+            {
+                pending = CountOf(PhotoFaceProcessingStatus.Pending),
+                processed = CountOf(PhotoFaceProcessingStatus.Processed),
+                failed = CountOf(PhotoFaceProcessingStatus.Failed)
+            });
         }
 
         // Says what actually happened to the selection. Silence here is what made the old
@@ -257,6 +380,10 @@ namespace AlgoForge.Controllers
                     message += $" {skipped.Count} file(s) skipped.";
                 }
 
+                // Detection and clustering now run in the background (PhotoDetectionWorker)
+                // rather than being held open on this request -- see that class for why.
+                message += " Detecting faces in the background -- refresh in a bit to see the new groups.";
+
                 TempData["SuccessMessage"] = message;
             }
 
@@ -264,7 +391,7 @@ namespace AlgoForge.Controllers
             {
                 if (uploaded == 0)
                 {
-                    TempData["ErrorMessage"] = "No files were selected.";
+                    AddErrorMessage("No files were selected.");
                 }
 
                 return;
@@ -280,9 +407,16 @@ namespace AlgoForge.Controllers
             }
 
             var detail = $"Skipped: {named}.";
-            TempData["ErrorMessage"] = uploaded > 0
+            AddErrorMessage(uploaded > 0
                 ? detail
-                : $"Nothing was uploaded. {detail}";
+                : $"Nothing was uploaded. {detail}");
+        }
+
+        private void AddErrorMessage(string message)
+        {
+            TempData["ErrorMessage"] = TempData["ErrorMessage"] is string existing && !string.IsNullOrWhiteSpace(existing)
+                ? $"{existing} {message}"
+                : message;
         }
 
         // The uploaded filename is attacker-controlled and is about to be echoed into a
@@ -299,6 +433,192 @@ namespace AlgoForge.Controllers
             var leaf = fileName.Replace('\\', '/').Split('/').Last();
             return leaf.Length <= 60 ? leaf : string.Concat(leaf.AsSpan(0, 57), "...");
         }
+
+        // Serves the image bytes for one photo, gated on membership of that photo's event.
+        //
+        // Photos used to be served straight off disk by a static-file provider mapped to
+        // /uploads, which meant anyone holding (or guessing) a URL could read a private
+        // event's pictures with no account at all -- and the URL survived being removed
+        // from the event. Every image in the app now comes through here instead.
+        // Anonymous is allowed *in* only so the share cookie can be examined -- the checks
+        // inside still refuse everyone who does not hold either it or event membership.
+        // Without this the controller's [Authorize] would redirect a link-shared viewer to
+        // a sign-in page for an account they were never meant to need.
+        [AllowAnonymous]
+        [HttpGet]
+        [Route("Photos/File/{id}")]
+        public async Task<IActionResult> File(Guid id)
+        {
+            var photo = await _db.Photos.FirstOrDefaultAsync(p => p.Id == id);
+            if (photo is null || photo.Status != PhotoStatus.Visible)
+            {
+                return NotFound();
+            }
+
+            // Tried first, and only ever satisfied by a link-shared event: a viewer here has
+            // no account at all, so the membership check below would send them to a sign-in
+            // page for a gallery whose whole premise is that it does not need one.
+            if (!await HoldsShareCookieAsync(photo.EventId))
+            {
+                var userIdText = _userManager.GetUserId(User);
+                if (userIdText is null || !Guid.TryParse(userIdText, out var viewerId))
+                {
+                    return Challenge();
+                }
+
+                var allowed = await _access.HasAnyRoleAsync(viewerId, photo.EventId, new[]
+                {
+                    EventRole.Coordinator, EventRole.Photographer, EventRole.Attendee, EventRole.Delegate
+                }, HttpContext.RequestAborted);
+
+                if (!allowed)
+                {
+                    return Forbid();
+                }
+            }
+
+            var stream = await _storage.OpenReadAsync(photo, HttpContext.RequestAborted);
+            if (stream is null)
+            {
+                return NotFound();
+            }
+
+            // A private gallery shouldn't linger in a shared browser cache after access ends.
+            Response.Headers.CacheControl = "no-store, no-cache, must-revalidate, private";
+
+            // base.File, not this action: the bytes are streamed from wherever storage put
+            // them, which in production is a blob and has no path to hand to PhysicalFile.
+            return base.File(stream, ContentTypeFor(photo.BlobUrl));
+        }
+
+        // GET /Photos/Download/{id} -- same access check as File, but sent as an
+        // attachment. D5 and D20 give every member of the event, delegates included, the
+        // right to keep a copy of the pictures they appear in.
+        // See File: anonymous in, still refused without the cookie or membership.
+        [AllowAnonymous]
+        [HttpGet]
+        [Route("Photos/Download/{id}")]
+        public async Task<IActionResult> Download(Guid id)
+        {
+            var (photo, stream) = await AuthorisedPhotoFileAsync(id);
+            if (photo is null || stream is null)
+            {
+                return NotFound();
+            }
+
+            Response.Headers.CacheControl = "no-store, no-cache, must-revalidate, private";
+
+            var extension = Path.GetExtension(photo.BlobUrl);
+            var fileName = $"{photo.UploadedAt:yyyy-MM-dd}-{photo.Id.ToString()[..8]}{extension}";
+            return base.File(stream, ContentTypeFor(photo.BlobUrl), fileName);
+        }
+
+        // POST /Photos/{id}/Delete -- a soft hide, not an erase (D8). The file stays on
+        // disk and the row keeps its detections and tags, so a takedown is reversible and
+        // the audit trail survives. Staff only: the people who ran the event decide what
+        // comes down.
+        [HttpPost]
+        [Route("Photos/{id}/Delete")]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Delete(Guid id)
+        {
+            var photo = await _db.Photos.FirstOrDefaultAsync(p => p.Id == id);
+            if (photo is null)
+            {
+                return NotFound();
+            }
+
+            var userIdText = _userManager.GetUserId(User);
+            if (userIdText is null || !Guid.TryParse(userIdText, out var viewerId))
+            {
+                return Challenge();
+            }
+
+            var allowed = await _access.HasAnyRoleAsync(viewerId, photo.EventId,
+                new[] { EventRole.Coordinator, EventRole.Photographer }, HttpContext.RequestAborted);
+
+            if (!allowed)
+            {
+                return Forbid();
+            }
+
+            photo.Status = PhotoStatus.Hidden;
+            await _db.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = "Photo removed from the gallery.";
+            return RedirectToAction(nameof(Index), new { eventId = photo.EventId });
+        }
+
+        // Shared by File and Download: resolves the photo, checks the viewer belongs to its
+        // event, and opens its bytes.
+        private async Task<(Photo? Photo, Stream? Content)> AuthorisedPhotoFileAsync(Guid id)
+        {
+            var photo = await _db.Photos.FirstOrDefaultAsync(p => p.Id == id);
+            if (photo is null || photo.Status != PhotoStatus.Visible)
+            {
+                return (null, null);
+            }
+
+            // Downloading is the point of a shared gallery, not a concession -- somebody
+            // handed a link is there to keep the photographs.
+            if (!await HoldsShareCookieAsync(photo.EventId))
+            {
+                var userIdText = _userManager.GetUserId(User);
+                if (userIdText is null || !Guid.TryParse(userIdText, out var viewerId))
+                {
+                    return (null, null);
+                }
+
+                var allowed = await _access.HasAnyRoleAsync(viewerId, photo.EventId, new[]
+                {
+                    EventRole.Coordinator, EventRole.Photographer, EventRole.Attendee, EventRole.Delegate
+                }, HttpContext.RequestAborted);
+
+                if (!allowed)
+                {
+                    return (null, null);
+                }
+            }
+
+            return (photo, await _storage.OpenReadAsync(photo, HttpContext.RequestAborted));
+        }
+
+        // True only when the request carries a cookie holding this event's current share
+        // token, and the event is actually a link-shared one.
+        //
+        // The token is re-read from the database on every request rather than trusted from
+        // the cookie alone, so rotating it shuts out browsers that were already admitted --
+        // otherwise "revoke the link" would mean nothing to whoever had already used it.
+        // Consent events are refused outright: no cookie may ever stand in for membership
+        // of a gallery whose photographs attendees agreed to share with members only.
+        private async Task<bool> HoldsShareCookieAsync(Guid eventId)
+        {
+            var presented = Request.Cookies[ShareController.CookieName(eventId)];
+            if (string.IsNullOrEmpty(presented))
+            {
+                return false;
+            }
+
+            var expected = await _db.Events
+                .Where(e => e.Id == eventId && e.GalleryMode == EventGalleryMode.LinkShared)
+                .Select(e => e.ShareToken)
+                .FirstOrDefaultAsync(HttpContext.RequestAborted);
+
+            return !string.IsNullOrEmpty(expected)
+                && System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(
+                    System.Text.Encoding.UTF8.GetBytes(presented),
+                    System.Text.Encoding.UTF8.GetBytes(expected));
+        }
+
+        private static string ContentTypeFor(string path) =>
+            Path.GetExtension(path).ToLowerInvariant() switch
+            {
+                ".png" => "image/png",
+                ".gif" => "image/gif",
+                ".webp" => "image/webp",
+                ".bmp" => "image/bmp",
+                _ => "image/jpeg"
+            };
 
         // The gallery shows every visible photo to every event member -- the photographs are
         // the event's, and they stay up regardless of who has connected with whom.
@@ -355,12 +675,21 @@ namespace AlgoForge.Controllers
 
             var connectionByOtherUser = connections.ToDictionary(c => c.OtherUserId(viewerId));
 
+            // One resolve of the viewer's roles drives the whole toolbar, so the page can't
+            // offer an action the request would then refuse.
+            var viewerRoles = await _access.ResolveRolesAsync(viewerId, eventId, HttpContext.RequestAborted);
+
             var model = new GalleryViewModel
             {
                 EventId = eventId,
                 EventName = evt.Name,
                 ConfirmedPeopleCount = confirmedTags.Select(t => t.TaggedAttendeeId).Distinct().Count(),
-                AwaitingConsentCount = detectionIds.Count - tagByDetection.Count
+                AwaitingConsentCount = detectionIds.Count - tagByDetection.Count,
+                CanUpload = viewerRoles.Contains(EventRole.Photographer),
+                CanIdentify = viewerRoles.Contains(EventRole.Coordinator) || viewerRoles.Contains(EventRole.Photographer),
+                CanDelete = viewerRoles.Contains(EventRole.Coordinator) || viewerRoles.Contains(EventRole.Photographer),
+                IsAttendee = viewerRoles.Contains(EventRole.Attendee),
+                IsDelegate = viewerRoles.Contains(EventRole.Delegate)
             };
 
             foreach (var photo in photos)
@@ -368,7 +697,8 @@ namespace AlgoForge.Controllers
                 var galleryPhoto = new GalleryPhoto
                 {
                     Id = photo.Id,
-                    Url = photo.BlobUrl,
+                    Url = Url.Action(nameof(File), "Photos", new { id = photo.Id })!,
+                    DownloadUrl = Url.Action(nameof(Download), "Photos", new { id = photo.Id })!,
                     UploadedAt = photo.UploadedAt
                 };
 
@@ -402,6 +732,10 @@ namespace AlgoForge.Controllers
                 DetectionId = detection.Id,
                 AttendeeId = attendee.Id,
                 Name = attendee.Name,
+                // Shown to every member. It is what the person chose to say about
+                // themselves, not a means of contacting them, so it isn't gated on a
+                // connection the way ContactEmail and ContactInfo are below.
+                About = string.IsNullOrWhiteSpace(attendee.About) ? null : attendee.About,
                 BoxX = detection.FaceX ?? detection.BoxX,
                 BoxY = detection.FaceY ?? detection.BoxY,
                 BoxWidth = detection.FaceWidth ?? detection.BoxWidth,

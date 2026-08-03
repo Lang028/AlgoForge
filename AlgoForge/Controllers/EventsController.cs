@@ -41,11 +41,16 @@ namespace AlgoForge.Controllers
                 return Challenge();
             }
 
-            var eventIds = await _db.EventMemberships
+            var memberships = await _db.EventMemberships
                 .Where(m => m.UserId == userId)
-                .Select(m => m.EventId)
-                .Distinct()
+                .Select(m => new { m.EventId, m.Role })
                 .ToListAsync();
+
+            var rolesByEvent = memberships
+                .GroupBy(m => m.EventId)
+                .ToDictionary(g => g.Key, g => g.Select(m => m.Role).ToList());
+
+            var eventIds = rolesByEvent.Keys.ToList();
 
             var events = await _db.Events
                 .Where(e => eventIds.Contains(e.Id))
@@ -54,18 +59,43 @@ namespace AlgoForge.Controllers
                 {
                     Id = e.Id,
                     Name = e.Name,
-                    OrganisationName = e.Organisation!.Name,
+                    OrganisationName = e.Organisation != null ? e.Organisation.Name : null,
                     EventDate = e.EventDate,
                     Status = e.Status,
-                    CoverUrl = e.Photos
+                    CoverPhotoId = e.Photos
                         .Where(p => p.Status == PhotoStatus.Visible)
                         .OrderBy(p => p.UploadedAt)
-                        .Select(p => p.BlobUrl)
+                        .Select(p => (Guid?)p.Id)
                         .FirstOrDefault(),
                     PhotoCount = e.Photos.Count(p => p.Status == PhotoStatus.Visible),
-                    AttendeeCount = e.Attendees.Count
+                    AttendeeCount = e.Attendees.Count,
+                    GalleryMode = e.GalleryMode,
+                    ShareToken = e.ShareToken
                 })
                 .ToListAsync();
+
+            foreach (var card in events)
+            {
+                card.ViewerRoles = rolesByEvent.TryGetValue(card.Id, out var roles)
+                    ? roles
+                    : new List<EventRole>();
+            }
+
+            // Covers are served through the authorising Photos/File action rather than a
+            // public /uploads URL, so the link is built once the rows are materialised.
+            foreach (var card in events.Where(c => c.CoverPhotoId is not null))
+            {
+                card.CoverUrl = Url.Action("File", "Photos", new { id = card.CoverPhotoId });
+            }
+
+            // Absolute, because the whole point of this one is to be copied out of the app
+            // and pasted into a message.
+            foreach (var card in events.Where(c => !string.IsNullOrEmpty(c.ShareToken)))
+            {
+                card.ShareUrl = Url.Action(
+                    nameof(ShareController.Gallery), "Share",
+                    new { token = card.ShareToken }, Request.Scheme);
+            }
 
             return View(events);
         }
@@ -73,9 +103,49 @@ namespace AlgoForge.Controllers
         [HttpGet]
         public async Task<IActionResult> Create()
         {
-            ViewData["Organisations"] = await _db.Organisations.OrderBy(o => o.Name).ToListAsync();
+            if (IsSystemAdmin)
+            {
+                return Forbid();
+            }
+
+            // Only organisations this user actually administers. You never file your event
+            // under someone else's organisation by picking it from a list -- an organisation
+            // takes an event on by accepting a handover invite.
+            ViewData["Organisations"] = await MyOrganisationsAsync();
             return View(new CreateEventViewModel());
         }
+
+        // The only thing standing between a stranger and somebody's gallery, so it comes
+        // from the cryptographic generator rather than Guid.NewGuid -- 256 bits, URL-safe,
+        // and not a value anyone can narrow down by knowing when the event was made.
+        private static string NewShareToken()
+        {
+            var bytes = System.Security.Cryptography.RandomNumberGenerator.GetBytes(32);
+
+            return Convert.ToBase64String(bytes)
+                .Replace('+', '-')
+                .Replace('/', '_')
+                .TrimEnd('=');
+        }
+
+        private async Task<List<Organisation>> MyOrganisationsAsync()
+        {
+            var userIdText = _userManager.GetUserId(User);
+            if (userIdText is null || !Guid.TryParse(userIdText, out var userId))
+            {
+                return new List<Organisation>();
+            }
+
+            return await _db.Organisations
+                .Where(o => o.AdminUserId == userId)
+                .OrderBy(o => o.Name)
+                .ToListAsync();
+        }
+
+        // The platform admin holds no EventMemberships, which is what keeps event content
+        // (attendee lists, galleries, tags) out of their reach. Creating an event would
+        // hand them Coordinator on it and undo exactly that, so this door is shut for them.
+        private bool IsSystemAdmin => User.IsInRole(DbInitializer.SystemAdminRole);
 
         // Creating an event grants the creator BOTH memberships, Coordinator and
         // Photographer.
@@ -89,9 +159,17 @@ namespace AlgoForge.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Create(CreateEventViewModel model)
         {
+            if (IsSystemAdmin)
+            {
+                return Forbid();
+            }
+
             if (!ModelState.IsValid)
             {
-                ViewData["Organisations"] = await _db.Organisations.OrderBy(o => o.Name).ToListAsync();
+                // Scoped like the other two paths in this controller. This one listed every
+                // organisation on the platform, so posting a deliberately invalid form was
+                // enough for any signed-in user to read back the customer list.
+                ViewData["Organisations"] = await MyOrganisationsAsync();
                 return View(model);
             }
 
@@ -101,13 +179,40 @@ namespace AlgoForge.Controllers
                 return Challenge();
             }
 
+            // An organisation is optional. Left empty the event stands on its own and the
+            // creator runs it outright via the two memberships granted below -- which is
+            // exactly what a photographer shooting a small private job needs. They can hand
+            // it to an organisation later without losing their own access.
+            Guid? organisationId = null;
+            if (model.OrganisationId is Guid chosen && chosen != Guid.Empty)
+            {
+                var administersIt = await _db.Organisations
+                    .AnyAsync(o => o.Id == chosen && o.AdminUserId == userId);
+
+                if (!administersIt)
+                {
+                    ModelState.AddModelError(nameof(model.OrganisationId),
+                        "You can only file an event under an organisation you administer.");
+                    ViewData["Organisations"] = await MyOrganisationsAsync();
+                    return View(model);
+                }
+
+                organisationId = chosen;
+            }
+
+            var linkShared = model.GalleryMode == EventGalleryMode.LinkShared;
+
             var evt = new Event
             {
                 Id = Guid.NewGuid(),
                 Name = model.Name,
                 EventDate = model.EventDate,
-                OrganisationId = model.OrganisationId,
-                TagConfirmationRequired = model.TagConfirmationRequired,
+                OrganisationId = organisationId,
+                // Meaningless on a link-shared gallery: there are no attendees to confirm
+                // anything, because nothing is ever tagged.
+                TagConfirmationRequired = !linkShared && model.TagConfirmationRequired,
+                GalleryMode = model.GalleryMode,
+                ShareToken = linkShared ? NewShareToken() : null,
                 Status = EventStatus.Draft
             };
             _db.Events.Add(evt);
@@ -213,7 +318,7 @@ namespace AlgoForge.Controllers
                 EventId = eventId,
                 Name = model.Name,
                 Email = model.Email,
-                ContactInfo = model.ContactInfo,
+                ContactInfo = model.ContactInfo ?? string.Empty,
                 InviteToken = Guid.NewGuid().ToString("N")
             };
 
@@ -297,7 +402,7 @@ namespace AlgoForge.Controllers
             // crafted post could overwrite InviteToken, ClaimedByUserId, or ContactsVisible.
             attendee.Name = model.Name;
             attendee.Email = model.Email;
-            attendee.ContactInfo = model.ContactInfo;
+            attendee.ContactInfo = model.ContactInfo ?? string.Empty;
 
             // Rule: an unclaimed attendee's invite token is only as trustworthy as the
             // email it was sent to, so a changed email invalidates the old link. Once
@@ -333,10 +438,26 @@ namespace AlgoForge.Controllers
             }
 
             var claimUrl = Url.Action(nameof(ClaimController.Claim), "Claim", new { token = attendee.InviteToken }, Request.Scheme)!;
-            await _emailSender.SendEmailAsync(attendee.Email, "You're tagged in photos from the event",
+
+            var sent = await _emailSender.SendEmailAsync(
+                attendee.Email,
+                "You're tagged in photos from the event",
                 $"Claim your photos and review your tags: {claimUrl}");
 
-            TempData["SuccessMessage"] = $"Invite sent to {attendee.Name}. Claim link (dev mode, not actually emailed): {claimUrl}";
+            // The link is shown either way, so a mail outage costs the coordinator a copy
+            // and paste rather than the ability to invite anyone at all. What changes is
+            // that they are told which of the two just happened.
+            if (sent)
+            {
+                TempData["SuccessMessage"] =
+                    $"Invite emailed to {attendee.Name}. The claim link is {claimUrl}";
+            }
+            else
+            {
+                TempData["ErrorMessage"] =
+                    $"Could not email {attendee.Name} — send them this claim link directly: {claimUrl}";
+            }
+
             return RedirectToAction(nameof(Attendees), new { eventId });
         }
 
@@ -417,15 +538,72 @@ namespace AlgoForge.Controllers
                 return RedirectToAction(nameof(ImportAttendees), new { eventId });
             }
 
-            var records = attendees.Select(a => new Attendee
+            // These rows arrive back through hidden form fields, so they are whatever was
+            // posted rather than whatever the parser approved. Re-checking them here is the
+            // difference between "the coordinator confirmed the rows we validated" and
+            // "the coordinator's browser sent us some rows".
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var records = new List<Attendee>();
+            var rejected = 0;
+
+            foreach (var a in attendees)
             {
-                Id = Guid.NewGuid(),
-                EventId = eventId,
-                Name = a.Name,
-                Email = a.Email,
-                ContactInfo = a.ContactInfo,
-                InviteToken = Guid.NewGuid().ToString("N")
-            }).ToList();
+                var name = a.Name?.Trim() ?? string.Empty;
+                var email = a.Email?.Trim() ?? string.Empty;
+
+                if (!AttendeeImportService.IsValidName(name)
+                    || !AttendeeImportService.IsValidEmail(email))
+                {
+                    rejected++;
+                    continue;
+                }
+
+                // Duplicates matter more here than bad syntax does. One person imported
+                // twice becomes two attendee records: detections cluster onto one and the
+                // tags they confirm land on the other, so the consent this whole app turns
+                // on quietly stops lining up with the photographs.
+                if (!seen.Add(email))
+                {
+                    rejected++;
+                    continue;
+                }
+
+                records.Add(new Attendee
+                {
+                    Id = Guid.NewGuid(),
+                    EventId = eventId,
+                    Name = name,
+                    Email = email,
+                    ContactInfo = a.ContactInfo?.Trim() ?? string.Empty,
+                    InviteToken = Guid.NewGuid().ToString("N")
+                });
+            }
+
+            // Already on the guest list from an earlier import: skipped rather than added
+            // again, for the same reason.
+            var existing = await _db.Attendees
+                .Where(x => x.EventId == eventId)
+                .Select(x => x.Email)
+                .ToListAsync();
+
+            var existingSet = new HashSet<string>(existing, StringComparer.OrdinalIgnoreCase);
+            var alreadyPresent = records.RemoveAll(r => existingSet.Contains(r.Email));
+
+            if (records.Count == 0)
+            {
+                TempData["ErrorMessage"] =
+                    $"Nothing imported: {rejected} row(s) were invalid or repeated, " +
+                    $"{alreadyPresent} already on the guest list.";
+
+                return RedirectToAction(nameof(ImportAttendees), new { eventId });
+            }
+
+            if (rejected > 0 || alreadyPresent > 0)
+            {
+                TempData["ErrorMessage"] =
+                    $"Skipped {rejected} invalid or repeated row(s) and " +
+                    $"{alreadyPresent} already on the guest list.";
+            }
 
             return await SaveAttendees(records, records.Count, eventId);
         }

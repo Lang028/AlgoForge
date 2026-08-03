@@ -10,12 +10,19 @@ namespace AlgoForge.Data
     public static class DbInitializer
     {
         public const string SystemAdminRole = "SystemAdmin";
-        public const string SystemAdminEmail = "admin@geeked.ac.za";
+        public const string SystemAdminEmail = "admin@algoforge.local";
 
+        // Every password below is a development convenience and is in this repository's
+        // git history permanently, so none of them may ever protect anything real. The
+        // admin password is read from configuration first (Seed:AdminPassword, set through
+        // user secrets or an app setting) precisely so that a deployment which does need a
+        // real admin account can supply one that was never committed. The literal is only
+        // the local-development fallback.
         public static async Task SeedAsync(
             AlgoForgeDbContext db,
             UserManager<ApplicationUser> userManager,
-            RoleManager<IdentityRole<Guid>> roleManager)
+            RoleManager<IdentityRole<Guid>> roleManager,
+            string? adminPassword = null)
         {
             // Platform admin: monitors the system through the read-only admin console and
             // never participates in events. It is an Identity role, deliberately separate
@@ -36,7 +43,20 @@ namespace AlgoForge.Data
                     DisplayName = "System Admin",
                     EmailConfirmed = true
                 };
-                await userManager.CreateAsync(systemAdmin, "Geeked@2026");
+                var result = await userManager.CreateAsync(
+                    systemAdmin,
+                    string.IsNullOrWhiteSpace(adminPassword) ? "DevAdmin@2026" : adminPassword);
+
+                if (!result.Succeeded)
+                {
+                    // Silently carrying on would leave an admin account that exists but
+                    // cannot be signed into, which is far harder to diagnose later than
+                    // failing here -- a supplied password that trips the Identity rules is
+                    // the likely cause.
+                    throw new InvalidOperationException(
+                        "Could not create the system admin: " +
+                        string.Join("; ", result.Errors.Select(e => e.Description)));
+                }
             }
             if (!await userManager.IsInRoleAsync(systemAdmin, SystemAdminRole))
             {
@@ -126,6 +146,26 @@ namespace AlgoForge.Data
                 await GrantAsync(db, demoEvent.Id, seedAdminUser.Id, EventRole.Coordinator);
                 await GrantAsync(db, demoEvent.Id, seedAdminUser.Id, EventRole.Photographer);
             }
+
+            // A photographer of their own, holding *only* the Photographer role. The seed
+            // admin above wears both hats, which is realistic for a one-person event but
+            // hides the thing D1 actually specifies: the two roles are disjoint. With this
+            // persona you can show a photographer who can upload but cannot open the
+            // attendee list, and a coordinator who can do the reverse.
+            var demoPhotographer = await userManager.FindByEmailAsync("demo-photographer@algoforge.local");
+            if (demoPhotographer is null)
+            {
+                demoPhotographer = new ApplicationUser
+                {
+                    UserName = "demo-photographer@algoforge.local",
+                    Email = "demo-photographer@algoforge.local",
+                    DisplayName = "Demo Photographer",
+                    EmailConfirmed = true
+                };
+                await userManager.CreateAsync(demoPhotographer, "DemoPhotographer123!");
+            }
+
+            await GrantAsync(db, demoEvent.Id, demoPhotographer.Id, EventRole.Photographer);
 
             await GrantAsync(db, demoEvent.Id, demoAttendeeUser.Id, EventRole.Attendee);
             await db.SaveChangesAsync();

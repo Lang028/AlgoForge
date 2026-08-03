@@ -18,9 +18,13 @@ namespace AlgoForge.ViewModels.Events
         [EmailAddress]
         public string Email { get; set; } = string.Empty;
 
-        [Required]
+        // Nullable on purpose: removing [Required] is not enough on its own, because the
+        // project builds with <Nullable>enable</Nullable> and ASP.NET Core treats a
+        // non-nullable reference type as implicitly required. A photographer adding a
+        // walk-in often doesn't have a phone number yet, so this has to be genuinely
+        // optional -- see RegisterViewModel.DisplayName for the same trap.
         [Display(Name = "Contact info")]
-        public string ContactInfo { get; set; } = string.Empty;
+        public string? ContactInfo { get; set; }
 
         // Display only
         public string EventName { get; set; } = string.Empty;

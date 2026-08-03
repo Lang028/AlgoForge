@@ -5,7 +5,7 @@
 
 <div class="gk-hero my-2">
     <h1>Add attendee</h1>
-    <div class="crumb">Geeked On <span class="sep">&rsaquo;</span> @Model.EventName <span class="sep">&rsaquo;</span> Attendees</div>
+    <div class="crumb">AlgoForge <span class="sep">&rsaquo;</span> @Model.EventName <span class="sep">&rsaquo;</span> Attendees</div>
 </div>
 
 <div class="gk-panel gk-form mt-3" style="max-width: 560px;">
@@ -26,7 +26,8 @@
 
         <div class="mb-4">
             <label asp-for="ContactInfo" class="form-label"></label>
-            <input asp-for="ContactInfo" class="form-control" placeholder="Phone, LinkedIn, ..." />
+            <input asp-for="ContactInfo" class="form-control" placeholder="Phone, LinkedIn, ... (optional)" />
+            <div class="form-text">Optional -- add it now if you know it, or fill it in later.</div>
             <span asp-validation-for="ContactInfo" class="text-danger"></span>
         </div>
 

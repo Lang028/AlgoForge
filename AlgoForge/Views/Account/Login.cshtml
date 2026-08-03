@@ -38,30 +38,6 @@
         justify-content: space-between;
     }
 
-    .auth-brand::before,
-    .auth-brand::after {
-        content: "";
-        position: absolute;
-        border-radius: 50%;
-        filter: blur(70px);
-        opacity: .5;
-    }
-
-    .auth-brand::before {
-        width: 240px;
-        height: 240px;
-        background: #f4502a;
-        top: -70px;
-        right: -70px;
-    }
-
-    .auth-brand::after {
-        width: 220px;
-        height: 220px;
-        background: #7c5cfc;
-        bottom: -80px;
-        left: -60px;
-    }
 
     .auth-brand > * { position: relative; z-index: 1; }
 
@@ -71,7 +47,7 @@
         letter-spacing: -.01em;
     }
 
-    .auth-logo .dot { color: #f4502a; }
+    .auth-logo .dot { color: #0ea5e9; }
 
     .auth-brand h2 {
         font-weight: 800;
@@ -103,7 +79,7 @@
 
     .auth-points li::before {
         content: "\2713";
-        color: #f4502a;
+        color: #0ea5e9;
         font-weight: 700;
     }
 
@@ -145,17 +121,17 @@
     .auth-form .form-control:focus,
     .auth-form .form-select:focus {
         background: #fff;
-        border-color: #f4502a;
-        box-shadow: 0 0 0 .2rem rgba(244, 80, 42, .12);
+        border-color: #0ea5e9;
+        box-shadow: 0 0 0 .2rem rgba(14, 165, 233, .12);
     }
 
     .auth-form .form-check-input:checked {
-        background-color: #f4502a;
-        border-color: #f4502a;
+        background-color: #0ea5e9;
+        border-color: #0ea5e9;
     }
 
     .btn-auth {
-        background: #f4502a;
+        background: #0ea5e9;
         color: #fff;
         border: 0;
         border-radius: 999px;
@@ -165,7 +141,7 @@
         transition: background .15s;
     }
 
-    .btn-auth:hover { background: #d84523; color: #fff; }
+    .btn-auth:hover { background: #0284c7; color: #fff; }
 
     .auth-alt {
         text-align: center;
@@ -175,7 +151,7 @@
     }
 
     .auth-alt a {
-        color: #f4502a;
+        color: #0ea5e9;
         font-weight: 600;
         text-decoration: none;
     }
@@ -193,7 +169,7 @@
 <div class="auth-wrap">
     <div class="auth-card">
         <div class="auth-brand">
-            <div class="auth-logo">Geeked On<span class="dot">.</span></div>
+            <div class="auth-logo">AlgoForge<span class="dot">.</span></div>
             <div>
                 <h2>Welcome back to your events.</h2>
                 <p>Photos, faces, and the people you meant to follow up with &mdash; all in one place.</p>
@@ -203,7 +179,7 @@
                     <li>Reconnect with people you met</li>
                 </ul>
             </div>
-            <p style="font-size:.75rem;">AlgoForge (Group 12) &middot; Durban University of Technology</p>
+            <p style="font-size:.75rem;">Your photos stay yours &mdash; nothing is tagged without your say-so.</p>
         </div>
 
         <div class="auth-form">
@@ -218,21 +194,16 @@
                     <input asp-for="Email" class="form-control" placeholder="you@example.com" />
                     <span asp-validation-for="Email" class="text-danger"></span>
                 </div>
-
+ 
                 <div class="mb-3">
                     <label asp-for="Password" class="form-label"></label>
                     <input asp-for="Password" class="form-control" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;" />
                     <span asp-validation-for="Password" class="text-danger"></span>
                 </div>
 
-                <div class="mb-3">
-                    <label asp-for="SelectedRole" class="form-label"></label>
-                    <select asp-for="SelectedRole" class="form-select"
-                            asp-items="Html.GetEnumSelectList<AlgoForge.Models.EventRole>()">
-                        <option value="">-- Select a role --</option>
-                    </select>
-                    <span asp-validation-for="SelectedRole" class="text-danger"></span>
-                </div>
+                @* No role picker here any more. The role chosen at sign-up is remembered,
+                   and an account that has since claimed an invite is shown the attendee
+                   side automatically -- see AccountController.ResolveActiveRoleAsync. *@
 
                 <div class="mb-4 form-check">
                     <input type="checkbox" class="form-check-input" asp-for="RememberMe" />
@@ -242,8 +213,30 @@
                 <button type="submit" class="btn-auth">Sign in</button>
             </form>
 
+            @* Offered only once we know which address is waiting on confirmation, so the
+               page never hints at whether an address is registered until the person has
+               already proved they know the password for it. *@
+            @if (ViewData["UnconfirmedEmail"] is string unconfirmed)
+            {
+                <form method="post" asp-action="ResendConfirmation" class="mt-2">
+                    <input type="hidden" name="email" value="@unconfirmed" />
+                    <button type="submit" class="btn btn-link p-0" style="font-size:.82rem;">
+                        Resend the confirmation email
+                    </button>
+                </form>
+            }
+
+            <div class="mt-2">
+                <a asp-action="ForgotPassword" style="font-size:.82rem;">Forgotten your password?</a>
+            </div>
+
             <div class="auth-alt">
-                New here? <a asp-action="Register">Create an account</a>
+                @* returnUrl is carried across deliberately. An attendee arrives here from an
+                   emailed /Claim/{token} link and usually has no account yet, so this is the
+                   link they actually take -- without it they register, land on the dashboard,
+                   and their invite is never claimed, leaving them with no access to the event
+                   they were invited to and no obvious way back. *@
+                New here? <a asp-action="Register" asp-route-returnUrl="@ViewData["ReturnUrl"]">Create an account</a>
                 <div class="mt-1">
                     <a asp-controller="Admin" asp-action="Login" style="color:#9ca3af; font-weight:500; font-size:.78rem;">System administrator? Sign in here</a>
                 </div>

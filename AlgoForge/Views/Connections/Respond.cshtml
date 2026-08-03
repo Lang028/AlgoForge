@@ -7,7 +7,7 @@
 <div class="d-flex justify-content-center py-5">
     <div class="gk-panel" style="max-width: 520px; width: 100%;">
         <div class="text-center mb-3">
-            <div style="width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,#7c5cfc,#f4502a);color:#fff;font-size:1.5rem;font-weight:700;display:flex;align-items:center;justify-content:center;margin:0 auto .75rem;">
+            <div style="width:64px;height:64px;border-radius:50%;background:#0ea5e9;color:#fff;font-size:1.5rem;font-weight:700;display:flex;align-items:center;justify-content:center;margin:0 auto .75rem;">
                 @requesterName[0]
             </div>
             <h2 class="fw-bold" style="color:#14141c; font-size:1.4rem;">Connection request</h2>
@@ -27,7 +27,7 @@
         else
         {
             <p class="text-center" style="font-size:1.05rem;">
-                <strong>@requesterName</strong> wants to connect with you@(Model.MetAtEvent is null ? "" : $" — you met at {Model.MetAtEvent.Name}").
+                <strong>@requesterName</strong> wants to connect with you@(Model.MetAtEvent is null ? "" : $" â€” you met at {Model.MetAtEvent.Name}").
             </p>
             <p class="text-muted text-center" style="font-size:.85rem;">
                 Accepting shares your email and contact details with them, and theirs with you.

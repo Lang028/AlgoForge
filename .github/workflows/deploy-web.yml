@@ -1,0 +1,69 @@
+name: Build and deploy AlgoForge web app
+
+on:
+  push:
+    branches:
+      - master
+      - feature/demo-ready
+    paths:
+      - "AlgoForge/**"
+      - ".github/workflows/deploy-web.yml"
+  workflow_dispatch:
+
+env:
+  IMAGE: ghcr.io/lang028/algoforge-web
+  # Lifted into env so the deploy steps can test for it -- `if:` cannot read `secrets`.
+  AZURE_CREDENTIALS: ${{ secrets.AZURE_CREDENTIALS }}
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: AlgoForge/Dockerfile
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:latest
+            ${{ env.IMAGE }}:${{ github.sha }}
+
+      # Deploying a *container* rewrites the site's container config through Azure's
+      # management API, which a publish profile does not authorise -- it only covers
+      # SCM/Kudu code pushes. That needs a service principal, so both steps below are
+      # skipped until AZURE_CREDENTIALS exists, leaving a green build that pushes the
+      # image without pretending the deploy happened.
+      #
+      # To enable automatic deploys:
+      #   az ad sp create-for-rbac --name algoforge-deploy-sp --role Contributor \
+      #     --scopes /subscriptions/<sub-id>/resourceGroups/algoforge-demo-rg --json-auth
+      #   gh secret set AZURE_CREDENTIALS --repo <owner>/<repo> < the-json-it-printed
+      #
+      # Until then the image is live after: az webapp restart --name algoforge-web-hg2026
+      #                                       --resource-group algoforge-demo-rg
+      - name: Log in to Azure
+        if: env.AZURE_CREDENTIALS != ''
+        uses: azure/login@v2
+        with:
+          creds: ${{ env.AZURE_CREDENTIALS }}
+
+      - name: Deploy to Azure Web App
+        if: env.AZURE_CREDENTIALS != ''
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: algoforge-web-hg2026
+          images: ${{ env.IMAGE }}:${{ github.sha }}

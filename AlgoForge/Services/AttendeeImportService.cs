@@ -22,6 +22,15 @@ namespace AlgoForge.Services
         private static readonly Regex EmailRegex =
             new Regex(@"^[^@]+@[^@]+\.[^@]+$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
+        // Exposed so the "import the valid rows anyway" path can hold rows to the same bar
+        // as the parse did. That path receives its rows back through hidden form fields,
+        // which means what it is handed is whatever was posted, not what was parsed.
+        public static bool IsValidEmail(string? email) =>
+            !string.IsNullOrWhiteSpace(email) && EmailRegex.IsMatch(email.Trim());
+
+        public static bool IsValidName(string? name) =>
+            !string.IsNullOrWhiteSpace(name);
+
         /// <summary>
         /// Parses a CSV stream and returns valid Attendee objects and row-level errors.
         /// Does NOT write to the database.

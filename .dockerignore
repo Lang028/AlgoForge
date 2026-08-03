@@ -1,0 +1,24 @@
+# Build context is the repo root (see AlgoForge/Dockerfile and face_service/Dockerfile
+# for the exact build commands). Excludes here keep the context small and stop
+# runtime/biometric data from ever ending up baked into an image.
+
+**/bin/
+**/obj/
+.vs/
+.git/
+.claude/
+
+# .NET runtime data: uploaded photos, the demo-mode email outbox. Never baked into an
+# image -- see AlgoForge/Dockerfile's own note about this needing real object storage.
+AlgoForge/App_Data/
+
+# Python: local venv, caches, and the embedding sidecar store (biometric vectors --
+# same reasoning as .gitignore, never committed and never baked into an image either).
+face_service/.venv/
+face_service/__pycache__/
+face_service/.pytest_cache/
+face_service/embeddings/
+**/__pycache__/
+
+# Test project isn't part of either image.
+AlgoForge.Tests/

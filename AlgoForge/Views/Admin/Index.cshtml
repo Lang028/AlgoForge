@@ -39,9 +39,9 @@
 
     .admin-badge {
         display: inline-block;
-        background: rgba(244, 80, 42, .15);
-        color: #f4502a;
-        border: 1px solid rgba(244, 80, 42, .4);
+        background: rgba(14, 165, 233, .15);
+        color: #0ea5e9;
+        border: 1px solid rgba(14, 165, 233, .4);
         border-radius: 999px;
         font-size: .65rem;
         font-weight: 700;
@@ -62,7 +62,7 @@
         width: 8px;
         height: 8px;
         border-radius: 50%;
-        background: #7c5cfc;
+        background: #0ea5e9;
         margin-right: .4rem;
     }
 
@@ -83,8 +83,10 @@
 
     .a-card small { color: rgba(255, 255, 255, .55); }
 
-    .a-card .accent-coral { color: #f4502a; }
-    .a-card .accent-violet { color: #7c5cfc; }
+    /* Two accent classes that resolved to the same colour, which is the same as having
+       neither -- the cards they distinguish looked identical. */
+    .a-card .accent-coral { color: #0ea5e9; }
+    .a-card .accent-violet { color: #8b5cf6; }
 
     .a-panel {
         background: #1d1d28;
@@ -126,8 +128,8 @@
         padding: .25rem .65rem;
     }
 
-    .status-pill.live { background: #f4502a; }
-    .status-pill.draft { background: #7c5cfc; }
+    .status-pill.live { background: #0ea5e9; }
+    .status-pill.draft { background: #f59e0b; }
     .status-pill.post { background: #3a3a4a; }
     .status-pill.archived { background: #6b7280; }
 
@@ -196,8 +198,8 @@
                     <h6 class="mb-3">Consent &amp; connections</h6>
                     <div class="tag-strip mb-3">
                         <span><span class="legend-dot" style="background:#e5e7eb"></span>Suggested @Model.SuggestedTags</span>
-                        <span><span class="legend-dot" style="background:#7c5cfc"></span>Confirmed @Model.ConfirmedTags</span>
-                        <span><span class="legend-dot" style="background:#f4502a"></span>Rejected @Model.RejectedTags</span>
+                        <span><span class="legend-dot" style="background:#0ea5e9"></span>Confirmed @Model.ConfirmedTags</span>
+                        <span><span class="legend-dot" style="background:#64748b"></span>Rejected @Model.RejectedTags</span>
                     </div>
                 </div>
                 <div class="row g-2">
@@ -261,7 +263,9 @@
     <script>
         const dayLabels = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(dayLabels));
         const dayCounts = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(dayCounts));
-        const barColors = dayCounts.map((_, i) => i === dayCounts.length - 1 ? '#f4502a' : '#7c5cfc');
+        // Both arms of this were the same colour, so the ternary picking out today did
+        // nothing at all. Today stays sky; the preceding days recede.
+        const barColors = dayCounts.map((_, i) => i === dayCounts.length - 1 ? '#0ea5e9' : '#3f4457');
 
         new Chart(document.getElementById('adminUploadsChart'), {
             type: 'bar',

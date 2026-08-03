@@ -6,7 +6,7 @@
 
 <div class="gk-hero my-2">
     <h1>Create event</h1>
-    <div class="crumb">Geeked On <span class="sep">&rsaquo;</span> Events <span class="sep">&rsaquo;</span> Create</div>
+    <div class="crumb">AlgoForge <span class="sep">&rsaquo;</span> Events <span class="sep">&rsaquo;</span> Create</div>
 </div>
 
 <div class="gk-panel gk-form mt-3" style="max-width: 560px;">
@@ -16,7 +16,7 @@
         <div class="mb-3">
             <label asp-for="OrganisationId" class="form-label"></label>
             <select asp-for="OrganisationId" class="form-select">
-                <option value="">Select an organisation</option>
+                <option value="">No organisation &mdash; I'll run this event myself</option>
                 @foreach (var org in organisations)
                 {
                     <option value="@org.Id">@org.Name</option>
@@ -24,14 +24,15 @@
             </select>
             <span asp-validation-for="OrganisationId" class="text-danger"></span>
             <div class="form-text">
-                Every event is hosted under an organisation.
-                <a class="gk-link" asp-controller="Organisations" asp-action="Create">Create a new organisation</a> if yours isn't listed.
+                Optional. Small events often have no organisation behind them &mdash; leave this
+                as it is and you keep full control of the event. You can hand it to an
+                organisation later, and they set themselves up when they accept.
             </div>
         </div>
 
         <div class="mb-3">
             <label asp-for="Name" class="form-label"></label>
-            <input asp-for="Name" class="form-control" placeholder="e.g. Demo Day 2026" />
+            <input asp-for="Name" class="form-control" placeholder="e.g. Annual Conference 2026" />
             <span asp-validation-for="Name" class="text-danger"></span>
         </div>
 
@@ -41,9 +42,57 @@
             <span asp-validation-for="EventDate" class="text-danger"></span>
         </div>
 
+        @* Asked once and never again -- see Event.GalleryMode. The warning is the point of
+           this block, not decoration: the two options collect very different things about
+           the people in the photographs, and only one of them can be chosen. *@
+        <div class="mb-4">
+            <label class="form-label fw-semibold">@Html.DisplayNameFor(m => m.GalleryMode)</label>
+
+            <div class="border rounded-3 p-3 mb-2">
+                <div class="form-check">
+                    <input class="form-check-input" type="radio" asp-for="GalleryMode"
+                           value="@AlgoForge.Models.EventGalleryMode.Consent" id="modeConsent" />
+                    <label class="form-check-label fw-semibold" for="modeConsent">
+                        Consent gallery &mdash; faces are matched
+                    </label>
+                </div>
+                <div class="text-muted mt-1" style="font-size:.83rem;">
+                    Attendees are invited by email. Faces are detected and grouped across the
+                    whole event, and a name only appears on a photo once that person confirms
+                    it. Attendees can find their own photos and connect with people they met.
+                </div>
+            </div>
+
+            <div class="border rounded-3 p-3">
+                <div class="form-check">
+                    <input class="form-check-input" type="radio" asp-for="GalleryMode"
+                           value="@AlgoForge.Models.EventGalleryMode.LinkShared" id="modeLink" />
+                    <label class="form-check-label fw-semibold" for="modeLink">
+                        Shared link &mdash; a plain gallery
+                    </label>
+                </div>
+                <div class="text-muted mt-1" style="font-size:.83rem;">
+                    You get a link. Anyone who has it can view and download the photos, with
+                    no account needed. <strong>No face detection runs</strong>, so nothing is
+                    stored about who is in the pictures &mdash; and there are no attendees,
+                    tags or connection requests.
+                </div>
+            </div>
+
+            <div class="alert alert-warning mt-2 mb-0" style="font-size:.82rem;">
+                <strong>This cannot be changed afterwards.</strong> Switching later would mean
+                either running face detection on people who were never told it would happen,
+                or exposing photos to a link that attendees had approved for members only.
+                Create a second event if you need the other kind.
+            </div>
+        </div>
+
         <div class="mb-4 form-check">
             <input asp-for="TagConfirmationRequired" class="form-check-input" />
-            <label asp-for="TagConfirmationRequired" class="form-check-label" style="font-size:.88rem;"></label>
+            <label asp-for="TagConfirmationRequired" class="form-check-label" style="font-size:.88rem;">
+                @Html.DisplayNameFor(m => m.TagConfirmationRequired)
+                <span class="text-muted">(consent galleries only)</span>
+            </label>
         </div>
 
         <div class="d-flex gap-2">

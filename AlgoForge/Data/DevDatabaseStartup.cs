@@ -63,6 +63,21 @@ namespace AlgoForge.Data
                 return true;
             }
 
+            // "stop -k" clears the registration but does not always kill the process: the
+            // instance idles out, leaves a live sqlservr behind, and the manager then
+            // reports Stopped while that process still holds the instance -- so every
+            // subsequent start fails. Observed repeatedly; the only thing that clears it is
+            // ending the process itself.
+            //
+            // Only reached once connecting AND both starts have failed, so there is no
+            // working instance to disturb, and the kill is filtered to processes whose
+            // command line names this instance so a real SQL Server service is untouched.
+            if (await KillOrphanedInstanceProcessesAsync(instance, logger, cancellationToken)
+                && await TryStartAsync(instance, logger, cancellationToken))
+            {
+                return true;
+            }
+
             logger.LogError(
                 "Could not start LocalDB instance {Instance} automatically. Run this in a terminal:\n" +
                 "    sqllocaldb stop {Instance} -k\n" +
@@ -129,6 +144,63 @@ namespace AlgoForge.Data
                 RegexOptions.IgnoreCase);
 
             return match.Success ? match.Groups["name"].Value.Trim() : null;
+        }
+
+        // Ends any sqlservr process that is still holding this LocalDB instance.
+        //
+        // Windows-only and deliberately narrow: the WMI filter matches the instance name in
+        // the process command line, which LocalDB passes as its -s argument, so a full SQL
+        // Server service (a different instance name, and usually a service account) does not
+        // match. Returns true if it killed something worth retrying for.
+        private static async Task<bool> KillOrphanedInstanceProcessesAsync(
+            string instance, ILogger logger, CancellationToken cancellationToken)
+        {
+            if (!OperatingSystem.IsWindows())
+            {
+                return false;
+            }
+
+            try
+            {
+                var script =
+                    "$p = Get-CimInstance Win32_Process -Filter \"Name='sqlservr.exe'\" | " +
+                    $"Where-Object {{ $_.CommandLine -like '*{instance}*' }}; " +
+                    "$p | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }; " +
+                    "@($p).Count";
+
+                using var process = Process.Start(new ProcessStartInfo
+                {
+                    FileName = "powershell",
+                    Arguments = $"-NoProfile -NonInteractive -Command \"{script}\"",
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                });
+
+                if (process is null)
+                {
+                    return false;
+                }
+
+                var output = await process.StandardOutput.ReadToEndAsync(cancellationToken);
+                await process.WaitForExitAsync(cancellationToken);
+
+                var killed = int.TryParse(output.Trim(), out var count) ? count : 0;
+                if (killed > 0)
+                {
+                    logger.LogWarning(
+                        "Ended {Count} orphaned sqlservr process(es) still holding {Instance}.",
+                        killed, instance);
+                }
+
+                return killed > 0;
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Could not check for orphaned {Instance} processes.", instance);
+                return false;
+            }
         }
 
         private static async Task<bool> RunAsync(

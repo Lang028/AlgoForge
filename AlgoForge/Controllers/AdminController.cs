@@ -60,7 +60,10 @@ namespace AlgoForge.Controllers
                 return View(model);
             }
 
-            var result = await _signInManager.PasswordSignInAsync(user, model.Password, isPersistent: false, lockoutOnFailure: false);
+            // Lockout counts here too, but the message stays generic on purpose: this door
+            // already refuses to say whether an address exists or merely isn't an admin,
+            // and a "locked out" reply would answer that for free.
+            var result = await _signInManager.PasswordSignInAsync(user, model.Password, isPersistent: false, lockoutOnFailure: true);
             if (!result.Succeeded)
             {
                 ModelState.AddModelError(string.Empty, "Invalid admin login attempt.");
@@ -110,7 +113,7 @@ namespace AlgoForge.Controllers
                     .Select(e => new EventOverviewRow
                     {
                         Name = e.Name,
-                        OrganisationName = e.Organisation!.Name,
+                        OrganisationName = e.Organisation != null ? e.Organisation.Name : "—",
                         EventDate = e.EventDate,
                         Status = e.Status,
                         PhotoCount = e.Photos.Count,

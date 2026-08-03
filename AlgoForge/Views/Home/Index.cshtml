@@ -39,7 +39,7 @@
         width: 64px;
         height: 64px;
         border-radius: 50%;
-        background: linear-gradient(135deg, #7c5cfc, #f4502a);
+        background: #0ea5e9;
         color: #fff;
         font-size: 1.5rem;
         font-weight: 700;
@@ -51,8 +51,8 @@
 
     .role-chip {
         display: inline-block;
-        background: #fef1ec;
-        color: #f4502a;
+        background: #e0f2fe;
+        color: #0ea5e9;
         border-radius: 999px;
         font-size: .7rem;
         font-weight: 700;
@@ -73,9 +73,9 @@
     }
 
     .dash-nav .nav-link.active {
-        color: #f4502a;
-        background: #fef1ec;
-        border-left: 3px solid #f4502a;
+        color: #0ea5e9;
+        background: #e0f2fe;
+        border-left: 3px solid #0ea5e9;
     }
 
     .dash-nav .nav-link:hover {
@@ -84,7 +84,7 @@
     }
 
     .dash-nav .badge-pending {
-        background: #f4502a;
+        background: #0ea5e9;
         color: #fff;
         border-radius: 999px;
         font-size: .65rem;
@@ -139,12 +139,12 @@
     }
 
     .stat-card.coral {
-        background: #f4502a;
+        background: #0ea5e9;
         color: #fff;
     }
 
     .stat-card.violet {
-        background: #7c5cfc;
+        background: #0ea5e9;
         color: #fff;
     }
 
@@ -168,7 +168,7 @@
     .panel .view-all {
         font-size: .8rem;
         text-decoration: none;
-        color: #f4502a;
+        color: #0ea5e9;
         font-weight: 600;
     }
 
@@ -202,8 +202,8 @@
 
     .event-pill:hover { color: #fff; opacity: .88; }
 
-    .event-pill.live { background: #f4502a; }
-    .event-pill.draft { background: #7c5cfc; }
+    .event-pill.live { background: #0ea5e9; }
+    .event-pill.draft { background: #0ea5e9; }
 
     .legend-dot {
         display: inline-block;
@@ -235,12 +235,12 @@
     .big-number {
         font-size: 2.4rem;
         font-weight: 800;
-        color: #f4502a;
+        color: #0ea5e9;
         line-height: 1;
     }
 
     .btn-coral-sm {
-        background: #f4502a;
+        background: #0ea5e9;
         color: #fff;
         border-radius: 999px;
         font-size: .78rem;
@@ -249,7 +249,7 @@
         border: 0;
     }
 
-    .btn-coral-sm:hover { background: #d84523; color: #fff; }
+    .btn-coral-sm:hover { background: #0284c7; color: #fff; }
 
     .btn-soft-sm {
         background: #f3f4f6;
@@ -296,13 +296,19 @@
                     {
                         <a class="nav-link" asp-controller="Organisations" asp-action="Index">&#127970; Organisations</a>
                     }
-                    <a class="nav-link" asp-controller="Connections" asp-action="Index">
-                        &#129309; Connections
-                        @if (Model.PendingConnectionRequests > 0)
-                        {
-                            <span class="badge-pending">@Model.PendingConnectionRequests</span>
-                        }
-                    </a>
+                    @* Connecting is an attendee concern (D11) -- a delegate views and downloads on the
+                       attendee's behalf but never tags people or answers connection requests, so the
+                       link is not offered to them at all. *@
+                    @if (role == EventRole.Attendee)
+                    {
+                        <a class="nav-link" asp-controller="Connections" asp-action="Index">
+                            &#129309; Connections
+                            @if (Model.PendingConnectionRequests > 0)
+                            {
+                                <span class="badge-pending">@Model.PendingConnectionRequests</span>
+                            }
+                        </a>
+                    }
                 </nav>
             </div>
 
@@ -466,7 +472,7 @@
                                     <td>
                                         @if (a.Claimed)
                                         {
-                                            <span class="badge rounded-pill" style="background:#7c5cfc">Claimed</span>
+                                            <span class="badge rounded-pill" style="background:#0ea5e9">Claimed</span>
                                         }
                                         else
                                         {
@@ -506,7 +512,7 @@
                     }
                 </div>
             }
-            else
+            else if (role == EventRole.Attendee)
             {
                 <div class="panel">
                     <h6>Tags waiting for your review</h6>
@@ -527,6 +533,19 @@
                             }
                         </a>
                     </div>
+                </div>
+            }
+            else
+            {
+                @* Delegate: viewing and downloading a gallery on an attendee's behalf is the whole
+                   scope of this role (DelegatesController) -- no tagging, no connections. *@
+                <div class="panel">
+                    <h6>Your shared galleries</h6>
+                    <small class="text-muted d-block mb-3">
+                        You're viewing these events on someone else's behalf. Open a gallery to browse
+                        and download photos.
+                    </small>
+                    <a class="btn btn-coral-sm" asp-controller="Events" asp-action="Index">Open my galleries</a>
                 </div>
             }
         </div>
@@ -564,8 +583,8 @@
                 </div>
                 <div class="mt-3" style="font-size:.8rem;">
                     <div class="mb-1"><span class="legend-dot" style="background:#e5e7eb"></span>Suggested (@Model.SuggestedTags)</div>
-                    <div class="mb-1"><span class="legend-dot" style="background:#7c5cfc"></span>Confirmed (@Model.ConfirmedTags)</div>
-                    <div><span class="legend-dot" style="background:#f4502a"></span>Rejected (@Model.RejectedTags)</div>
+                    <div class="mb-1"><span class="legend-dot" style="background:#0ea5e9"></span>Confirmed (@Model.ConfirmedTags)</div>
+                    <div><span class="legend-dot" style="background:#64748b"></span>Rejected (@Model.RejectedTags)</div>
                 </div>
             </div>
         </div>
@@ -578,8 +597,8 @@
         const dayLabels = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(dayLabels));
         const dayCounts = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(dayCounts));
 
-        // Highlight today (last bar) in coral, the rest dark — like the reference design.
-        const barColors = dayCounts.map((_, i) => i === dayCounts.length - 1 ? '#f4502a' : '#14141c');
+        // Highlight today (last bar) in coral, the rest dark â€” like the reference design.
+        const barColors = dayCounts.map((_, i) => i === dayCounts.length - 1 ? '#0ea5e9' : '#14141c');
 
         new Chart(document.getElementById('uploadsChart'), {
             type: 'bar',
@@ -607,7 +626,11 @@
                 labels: @(Model.TotalTags == 0 ? Html.Raw("['No tags yet']") : Html.Raw("['Suggested', 'Confirmed', 'Rejected']")),
                 datasets: [{
                     data: @(Model.TotalTags == 0 ? Html.Raw("[1]") : Html.Raw($"[{Model.SuggestedTags}, {Model.ConfirmedTags}, {Model.RejectedTags}]")),
-                    backgroundColor: @(Model.TotalTags == 0 ? Html.Raw("['#eceef1']") : Html.Raw("['#e5e7eb', '#7c5cfc', '#f4502a']")),
+                    // Rejected was the same sky blue as Confirmed, making the two opposite
+                    // outcomes one indistinguishable arc. Slate rather than red: rejecting a
+                    // tag is somebody exercising the choice this product is built around, not
+                    // an error state to be flagged.
+                    backgroundColor: @(Model.TotalTags == 0 ? Html.Raw("['#eceef1']") : Html.Raw("['#e5e7eb', '#0ea5e9', '#64748b']")),
                     borderWidth: 0,
                     cutout: '72%'
                 }]
