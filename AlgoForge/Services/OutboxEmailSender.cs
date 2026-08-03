@@ -50,7 +50,7 @@ namespace AlgoForge.Services
                 <body style="margin:0;background:#f4f4f8;font-family:Segoe UI,Arial,sans-serif;">
                   <div style="max-width:620px;margin:28px auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 12px 32px rgba(20,20,28,.10);">
                     <div style="background:#0ea5e9;color:#fff;padding:20px 26px;">
-                      <div style="font-size:1.25rem;font-weight:700;">Geeked On.</div>
+                      <div style="font-size:1.25rem;font-weight:700;">AlgoForge.</div>
                     </div>
                     <div style="padding:24px 26px;">
                       <p style="color:#6b6b7b;margin:0 0 4px;"><strong>To:</strong> {WebUtility.HtmlEncode(toEmail)}</p>

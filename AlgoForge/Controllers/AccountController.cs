@@ -377,7 +377,7 @@ namespace AlgoForge.Controllers
 
             var sent = await _emailSender.SendEmailAsync(
                 user.Email!,
-                "Confirm your Geeked On account",
+                "Confirm your AlgoForge account",
                 $"Confirm your email address to finish setting up your account:\n\n{link}\n\n" +
                 "If you didn't create this account, you can ignore this message.");
 
@@ -426,7 +426,7 @@ namespace AlgoForge.Controllers
 
                 await _emailSender.SendEmailAsync(
                     user.Email!,
-                    "Reset your Geeked On password",
+                    "Reset your AlgoForge password",
                     $"Use this link to choose a new password:\n\n{link}\n\n" +
                     "If you didn't ask for this, nothing has changed and you can ignore it.");
             }

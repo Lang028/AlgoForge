@@ -1,10 +1,10 @@
-# Geeked On
+# AlgoForge
 
 **Organisation-managed event photography and attendee reconnection platform.**
 
-Geeked On lets organisations run photo galleries for their events, automatically groups the faces in those photos, and — with each person's explicit consent — tags attendees so they can find their photos and reconnect with the people they met.
+AlgoForge lets organisations run photo galleries for their events, automatically groups the faces in those photos, and — with each person's explicit consent — tags attendees so they can find their photos and reconnect with the people they met.
 
-> The core idea: event photos are full of people you meant to follow up with and never did. Geeked On turns a photo gallery into a consent-based networking layer.
+> The core idea: event photos are full of people you meant to follow up with and never did. AlgoForge turns a photo gallery into a consent-based networking layer.
 
 ---
 
@@ -200,7 +200,7 @@ Configuration (connection strings, blob credentials, queue names) is read from `
 
 ## Project structure
 
-Kept the `AlgoForge` project/repo naming rather than renaming to `GeekedOn.*`:
+Project layout:
 
 ```
 AlgoForge/

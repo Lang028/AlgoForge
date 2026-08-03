@@ -8,7 +8,7 @@
 
 ## Context — why this exists
 
-Right now Geeked On **cannot create an organisation at all.** Every event belongs to an
+Right now AlgoForge **cannot create an organisation at all.** Every event belongs to an
 `Organisation`, and the "Create event" page renders an organisation dropdown — but the only
 row that ever exists is the single "Demo Org" that `Data/DbInitializer.cs` seeds on startup
 for local testing. Adding a second organisation currently means writing SQL by hand.
