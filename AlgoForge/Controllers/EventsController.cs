@@ -142,7 +142,10 @@ namespace AlgoForge.Controllers
 
             if (!ModelState.IsValid)
             {
-                ViewData["Organisations"] = await _db.Organisations.OrderBy(o => o.Name).ToListAsync();
+                // Scoped like the other two paths in this controller. This one listed every
+                // organisation on the platform, so posting a deliberately invalid form was
+                // enough for any signed-in user to read back the customer list.
+                ViewData["Organisations"] = await MyOrganisationsAsync();
                 return View(model);
             }
 
