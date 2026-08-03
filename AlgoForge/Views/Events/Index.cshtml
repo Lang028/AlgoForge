@@ -234,9 +234,31 @@ else
                             }
                         </div>
                         <div class="event-stats">
-                            @evt.PhotoCount photo@(evt.PhotoCount == 1 ? "" : "s") &middot;
-                            @evt.AttendeeCount attendee@(evt.AttendeeCount == 1 ? "" : "s")
+                            @evt.PhotoCount photo@(evt.PhotoCount == 1 ? "" : "s")
+                            @* Attendees are a consent-gallery idea; a shared link has none. *@
+                            @if (evt.GalleryMode == EventGalleryMode.Consent)
+                            {
+                                <text>&middot; @evt.AttendeeCount attendee@(evt.AttendeeCount == 1 ? "" : "s")</text>
+                            }
+                            else
+                            {
+                                <text>&middot; shared by link</text>
+                            }
                         </div>
+
+                        @if (evt.ShareUrl is not null)
+                        {
+                            <div class="mb-2">
+                                <input type="text" class="form-control form-control-sm gk-share-url"
+                                       value="@evt.ShareUrl" readonly
+                                       style="font-size:.72rem;"
+                                       onclick="this.select();" />
+                                <button type="button" class="btn btn-link p-0 gk-copy-share"
+                                        data-share-url="@evt.ShareUrl" style="font-size:.75rem;">
+                                    Copy gallery link
+                                </button>
+                            </div>
+                        }
                         <div class="event-actions">
                             <a class="btn btn-coral" asp-controller="Photos" asp-action="Index" asp-route-eventId="@evt.Id">Gallery</a>
                             @if (evt.CanUpload)
@@ -258,4 +280,19 @@ else
             </div>
         }
     </div>
+}
+
+@section Scripts {
+    <script>
+        // Attendee cards elsewhere use the same pattern for their claim links.
+        document.querySelectorAll('.gk-copy-share').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                navigator.clipboard.writeText(btn.dataset.shareUrl).then(function () {
+                    var original = btn.textContent;
+                    btn.textContent = 'Copied';
+                    setTimeout(function () { btn.textContent = original; }, 1500);
+                });
+            });
+        });
+    </script>
 }

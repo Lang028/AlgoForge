@@ -68,7 +68,9 @@ namespace AlgoForge.Controllers
                         .Select(p => (Guid?)p.Id)
                         .FirstOrDefault(),
                     PhotoCount = e.Photos.Count(p => p.Status == PhotoStatus.Visible),
-                    AttendeeCount = e.Attendees.Count
+                    AttendeeCount = e.Attendees.Count,
+                    GalleryMode = e.GalleryMode,
+                    ShareToken = e.ShareToken
                 })
                 .ToListAsync();
 
@@ -84,6 +86,15 @@ namespace AlgoForge.Controllers
             foreach (var card in events.Where(c => c.CoverPhotoId is not null))
             {
                 card.CoverUrl = Url.Action("File", "Photos", new { id = card.CoverPhotoId });
+            }
+
+            // Absolute, because the whole point of this one is to be copied out of the app
+            // and pasted into a message.
+            foreach (var card in events.Where(c => !string.IsNullOrEmpty(c.ShareToken)))
+            {
+                card.ShareUrl = Url.Action(
+                    nameof(ShareController.Gallery), "Share",
+                    new { token = card.ShareToken }, Request.Scheme);
             }
 
             return View(events);
@@ -102,6 +113,19 @@ namespace AlgoForge.Controllers
             // takes an event on by accepting a handover invite.
             ViewData["Organisations"] = await MyOrganisationsAsync();
             return View(new CreateEventViewModel());
+        }
+
+        // The only thing standing between a stranger and somebody's gallery, so it comes
+        // from the cryptographic generator rather than Guid.NewGuid -- 256 bits, URL-safe,
+        // and not a value anyone can narrow down by knowing when the event was made.
+        private static string NewShareToken()
+        {
+            var bytes = System.Security.Cryptography.RandomNumberGenerator.GetBytes(32);
+
+            return Convert.ToBase64String(bytes)
+                .Replace('+', '-')
+                .Replace('/', '_')
+                .TrimEnd('=');
         }
 
         private async Task<List<Organisation>> MyOrganisationsAsync()
@@ -176,13 +200,19 @@ namespace AlgoForge.Controllers
                 organisationId = chosen;
             }
 
+            var linkShared = model.GalleryMode == EventGalleryMode.LinkShared;
+
             var evt = new Event
             {
                 Id = Guid.NewGuid(),
                 Name = model.Name,
                 EventDate = model.EventDate,
                 OrganisationId = organisationId,
-                TagConfirmationRequired = model.TagConfirmationRequired,
+                // Meaningless on a link-shared gallery: there are no attendees to confirm
+                // anything, because nothing is ever tagged.
+                TagConfirmationRequired = !linkShared && model.TagConfirmationRequired,
+                GalleryMode = model.GalleryMode,
+                ShareToken = linkShared ? NewShareToken() : null,
                 Status = EventStatus.Draft
             };
             _db.Events.Add(evt);

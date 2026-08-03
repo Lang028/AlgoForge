@@ -75,6 +75,14 @@ namespace AlgoForge.Data
                 .HasIndex(a => new { a.EventId, a.Email })
                 .IsUnique();
 
+            // Every request to a shared gallery is a lookup by this value, and two events
+            // must never answer to the same one. Filtered, because consent events leave it
+            // null and a unique index would otherwise allow only one of them.
+            builder.Entity<Event>()
+                .HasIndex(e => e.ShareToken)
+                .IsUnique()
+                .HasFilter("[ShareToken] IS NOT NULL");
+
             builder.Entity<Photo>()
                 .HasOne(p => p.UploadedByUser)
                 .WithMany()
