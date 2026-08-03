@@ -1,8 +1,8 @@
-# Geeked On — Build Guide
+# AlgoForge — Build Guide
 
-**Single source of truth for the Geeked On build.** Any human or AI joining this project reads this document first. If a decision is recorded here as LOCKED, do not re-litigate it — build to it. If something is marked OPEN, it has not been decided; resolve it with Lange before writing code that depends on it.
+**Single source of truth for the AlgoForge build.** Any human or AI joining this project reads this document first. If a decision is recorded here as LOCKED, do not re-litigate it — build to it. If something is marked OPEN, it has not been decided; resolve it with Lange before writing code that depends on it.
 
-- Project: Geeked On — organisation-managed event photography and attendee reconnection platform
+- Project: AlgoForge — organisation-managed event photography and attendee reconnection platform
 - Owner: Langelihle (Lange) Gumede
 
 ---
@@ -11,7 +11,7 @@
 
 Organisations run photo galleries for their events. The system detects and clusters faces across all event photos. With each attendee's explicit consent, faces are tagged so attendees can find their photos and reconnect with people they met. Consent and privacy apply to **personal information (contacts, identity)** — the photos themselves are event photos, shared in the spirit of the event. Access is invitation-only; there are no open guest links, no feed, no engagement loop.
 
-**The one-line pitch:** event photos are full of people you meant to follow up with and never did; Geeked On turns a photo gallery into a consent-based networking layer — without becoming another social media site.
+**The one-line pitch:** event photos are full of people you meant to follow up with and never did; AlgoForge turns a photo gallery into a consent-based networking layer — without becoming another social media site.
 
 ### The core flow
 

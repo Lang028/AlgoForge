@@ -1,4 +1,4 @@
-# AlgoForge / Geeked On — demo guide
+# AlgoForge / AlgoForge — demo guide
 
 Run it:
 
@@ -14,7 +14,7 @@ need it to detect faces.
 
 | Who | Email | Password | Sign in at |
 |---|---|---|---|
-| Platform admin | `admin@geeked.ac.za` | `Geeked@2026` | `/Admin/Login` |
+| Platform admin | `admin@algoforge.local` | `DevAdmin@2026` | `/Admin/Login` |
 | Coordinator + Photographer | `seed-admin@algoforge.local` | `SeedAdmin123!` | `/Account/Login` |
 | Photographer only | `demo-photographer@algoforge.local` | `DemoPhotographer123!` | `/Account/Login` |
 | Attendee | `demo-attendee@algoforge.local` | `DemoAttendee123!` | `/Account/Login` |

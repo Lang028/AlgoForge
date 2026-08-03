@@ -10,7 +10,7 @@ namespace AlgoForge.Data
     public static class DbInitializer
     {
         public const string SystemAdminRole = "SystemAdmin";
-        public const string SystemAdminEmail = "admin@geeked.ac.za";
+        public const string SystemAdminEmail = "admin@algoforge.local";
 
         // Every password below is a development convenience and is in this repository's
         // git history permanently, so none of them may ever protect anything real. The
@@ -45,7 +45,7 @@ namespace AlgoForge.Data
                 };
                 var result = await userManager.CreateAsync(
                     systemAdmin,
-                    string.IsNullOrWhiteSpace(adminPassword) ? "Geeked@2026" : adminPassword);
+                    string.IsNullOrWhiteSpace(adminPassword) ? "DevAdmin@2026" : adminPassword);
 
                 if (!result.Succeeded)
                 {

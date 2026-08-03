@@ -110,7 +110,7 @@ namespace AlgoForge.Controllers
 
             var sent = await _emailSender.SendEmailAsync(invite.Email,
                 $"You've been asked to manage {evt.Name}",
-                $"You have been invited to take on the event \"{evt.Name}\" on Geeked On.\n\n" +
+                $"You have been invited to take on the event \"{evt.Name}\" on AlgoForge.\n\n" +
                 $"Accepting lets you set your organisation up and take over managing the event " +
                 $"-- its attendees, tagging and settings.\n\nOpen this link to accept: {acceptUrl}");
 
