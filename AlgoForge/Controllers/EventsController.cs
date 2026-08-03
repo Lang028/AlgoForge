@@ -508,15 +508,72 @@ namespace AlgoForge.Controllers
                 return RedirectToAction(nameof(ImportAttendees), new { eventId });
             }
 
-            var records = attendees.Select(a => new Attendee
+            // These rows arrive back through hidden form fields, so they are whatever was
+            // posted rather than whatever the parser approved. Re-checking them here is the
+            // difference between "the coordinator confirmed the rows we validated" and
+            // "the coordinator's browser sent us some rows".
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var records = new List<Attendee>();
+            var rejected = 0;
+
+            foreach (var a in attendees)
             {
-                Id = Guid.NewGuid(),
-                EventId = eventId,
-                Name = a.Name,
-                Email = a.Email,
-                ContactInfo = a.ContactInfo,
-                InviteToken = Guid.NewGuid().ToString("N")
-            }).ToList();
+                var name = a.Name?.Trim() ?? string.Empty;
+                var email = a.Email?.Trim() ?? string.Empty;
+
+                if (!AttendeeImportService.IsValidName(name)
+                    || !AttendeeImportService.IsValidEmail(email))
+                {
+                    rejected++;
+                    continue;
+                }
+
+                // Duplicates matter more here than bad syntax does. One person imported
+                // twice becomes two attendee records: detections cluster onto one and the
+                // tags they confirm land on the other, so the consent this whole app turns
+                // on quietly stops lining up with the photographs.
+                if (!seen.Add(email))
+                {
+                    rejected++;
+                    continue;
+                }
+
+                records.Add(new Attendee
+                {
+                    Id = Guid.NewGuid(),
+                    EventId = eventId,
+                    Name = name,
+                    Email = email,
+                    ContactInfo = a.ContactInfo?.Trim() ?? string.Empty,
+                    InviteToken = Guid.NewGuid().ToString("N")
+                });
+            }
+
+            // Already on the guest list from an earlier import: skipped rather than added
+            // again, for the same reason.
+            var existing = await _db.Attendees
+                .Where(x => x.EventId == eventId)
+                .Select(x => x.Email)
+                .ToListAsync();
+
+            var existingSet = new HashSet<string>(existing, StringComparer.OrdinalIgnoreCase);
+            var alreadyPresent = records.RemoveAll(r => existingSet.Contains(r.Email));
+
+            if (records.Count == 0)
+            {
+                TempData["ErrorMessage"] =
+                    $"Nothing imported: {rejected} row(s) were invalid or repeated, " +
+                    $"{alreadyPresent} already on the guest list.";
+
+                return RedirectToAction(nameof(ImportAttendees), new { eventId });
+            }
+
+            if (rejected > 0 || alreadyPresent > 0)
+            {
+                TempData["ErrorMessage"] =
+                    $"Skipped {rejected} invalid or repeated row(s) and " +
+                    $"{alreadyPresent} already on the guest list.";
+            }
 
             return await SaveAttendees(records, records.Count, eventId);
         }

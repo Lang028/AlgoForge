@@ -119,6 +119,14 @@ builder.Services.AddHttpClient<PersonPipelineService>(client =>
 
     client.BaseAddress = new Uri(baseUrl);
 
+    // Presented on every call to the face service, which rejects /detect and /cluster
+    // without it. Absent locally, where the service runs unauthenticated on a laptop.
+    var pipelineKey = builder.Configuration["PersonPipeline:Key"];
+    if (!string.IsNullOrWhiteSpace(pipelineKey))
+    {
+        client.DefaultRequestHeaders.Add("X-Pipeline-Key", pipelineKey);
+    }
+
     // Clustering is O(n^2) over an event's detections and runs on CPU, so it is far
     // slower than a single detection call -- a few thousand detections can take minutes.
     client.Timeout = TimeSpan.FromMinutes(10);

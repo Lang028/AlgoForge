@@ -34,6 +34,8 @@ namespace AlgoForge.Services.PersonPipeline
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
+            await RequeuePendingAsync(stoppingToken);
+
             await foreach (var photoId in _queue.DequeueAllAsync(stoppingToken))
             {
                 try
@@ -47,6 +49,56 @@ namespace AlgoForge.Services.PersonPipeline
                     // ever being detected until the app restarts.
                     _logger.LogError(ex, "Background face detection crashed for photo {PhotoId}.", photoId);
                 }
+            }
+        }
+
+        // The queue itself lives in memory, so everything still waiting in it dies with the
+        // process -- and on App Service the process is replaced on every deploy, every
+        // restart and every scale event, none of which the photographer who uploaded those
+        // photos has any idea about. Their pictures would sit at Pending forever: no
+        // detections, no clusters, no tags to approve, and nothing anywhere saying so.
+        //
+        // The database already records exactly which those are, so the queue does not need
+        // to survive a restart -- it only needs to be rebuilt from the rows on the way up.
+        // FaceProcessingStatus is the durable record; PhotoDetectionQueue is a work list
+        // derived from it.
+        private async Task RequeuePendingAsync(CancellationToken stoppingToken)
+        {
+            try
+            {
+                using var scope = _scopeFactory.CreateScope();
+                var db = scope.ServiceProvider.GetRequiredService<AlgoForgeDbContext>();
+
+                if (!db.Database.IsRelational())
+                {
+                    return;
+                }
+
+                var pending = await db.Photos
+                    .Where(p => p.FaceProcessingStatus == PhotoFaceProcessingStatus.Pending
+                                && p.Status == PhotoStatus.Visible)
+                    .OrderBy(p => p.UploadedAt)
+                    .Select(p => p.Id)
+                    .ToListAsync(stoppingToken);
+
+                foreach (var id in pending)
+                {
+                    _queue.Enqueue(id);
+                }
+
+                if (pending.Count > 0)
+                {
+                    _logger.LogInformation(
+                        "Requeued {Count} photo(s) still pending detection from a previous run.",
+                        pending.Count);
+                }
+            }
+            catch (Exception ex)
+            {
+                // A database that is not up yet must not stop the worker starting: new
+                // uploads would then never be detected either, turning a slow start into a
+                // permanent outage of the whole pipeline.
+                _logger.LogError(ex, "Could not requeue photos left pending from a previous run.");
             }
         }
 

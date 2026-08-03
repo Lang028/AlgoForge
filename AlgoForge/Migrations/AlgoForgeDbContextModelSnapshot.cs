@@ -141,7 +141,7 @@ namespace AlgoForge.Migrations
 
                     b.Property<string>("Email")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<Guid>("EventId")
                         .HasColumnType("uniqueidentifier");
@@ -161,7 +161,8 @@ namespace AlgoForge.Migrations
 
                     b.HasIndex("ClaimedByUserId");
 
-                    b.HasIndex("EventId");
+                    b.HasIndex("EventId", "Email")
+                        .IsUnique();
 
                     b.ToTable("Attendees");
                 });

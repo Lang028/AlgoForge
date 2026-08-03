@@ -14,9 +14,11 @@ Run locally (D19 -- the worker runs on a team laptop):
     uvicorn main:app --port 8000
 """
 
+import hmac
 import logging
+import os
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadFile
 
 from pipeline import detectors, embeddings, processing
 from pipeline.clustering import cluster_event
@@ -26,6 +28,29 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="AlgoForge Person Identification Service")
+
+# Shared secret the web app presents on every call.
+#
+# This service holds no database connection, but it does hold the models: an unauthenticated
+# /detect is a way for anyone who can route to it to spend our CPU, and /cluster will happily
+# describe how detections group together. Network restrictions alone were not enough -- App
+# Service outbound addresses are shared between tenants on a scale unit, so an IP allowlist
+# admits far more than the one app it looks like it admits.
+#
+# Unset means unauthenticated, which is what a local run wants (uvicorn on a laptop, pytest,
+# start-face-service.bat) and what a deployment must never be. Startup says loudly which of
+# the two this is, because the failure mode is silent otherwise.
+PIPELINE_KEY = os.environ.get("PIPELINE_KEY", "").strip()
+
+
+def require_key(x_pipeline_key: str = Header(default="")) -> None:
+    if not PIPELINE_KEY:
+        return
+
+    # Constant time: a plain == leaks the shared secret one character at a time to
+    # anyone patient enough to measure the difference.
+    if not hmac.compare_digest(x_pipeline_key, PIPELINE_KEY):
+        raise HTTPException(status_code=401, detail="Invalid or missing pipeline key")
 
 
 @app.on_event("startup")
@@ -39,6 +64,14 @@ def warm_up() -> None:
     detectors.get_yolo()
     embeddings.available_signals()
 
+    if PIPELINE_KEY:
+        logger.info("PIPELINE_KEY is set: /detect and /cluster require the shared key.")
+    else:
+        logger.warning(
+            "PIPELINE_KEY is NOT set: /detect and /cluster are UNAUTHENTICATED. "
+            "That is fine on a laptop and wrong anywhere reachable by anyone else."
+        )
+
 
 @app.get("/health")
 def health() -> dict:
@@ -51,7 +84,7 @@ def health() -> dict:
     return {"status": "ok", "signals": embeddings.available_signals()}
 
 
-@app.post("/detect", response_model=DetectResponse)
+@app.post("/detect", response_model=DetectResponse, dependencies=[Depends(require_key)])
 async def detect(
     file: UploadFile = File(...),
     photo_id: str = Form(...),
@@ -77,7 +110,7 @@ async def detect(
     )
 
 
-@app.post("/cluster", response_model=ClusterResponse)
+@app.post("/cluster", response_model=ClusterResponse, dependencies=[Depends(require_key)])
 def cluster(request: ClusterRequest) -> ClusterResponse:
     clusters, unclustered = cluster_event(request.detections, request.constraints)
     logger.info(
